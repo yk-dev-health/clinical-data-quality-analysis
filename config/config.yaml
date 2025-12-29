@@ -1,3 +1,12 @@
+quality:
+  missing:
+    warning_threshold: 0.0
+    critical_threshold: 0.5
+    report_top_n_columns: 5
+
+  numeric_summary:
+    enabled: true
+
 missing_values:
   max_missing_ratio: 0.3
   placeholders: ["?", "NA", "N/A", ""]
@@ -7,3 +16,6 @@ outliers:
   method: iqr
   iqr_multiplier: 1.5
   numeric_only: true
+
+logging:
+  level: INFO
