@@ -1,0 +1,13 @@
+[project]
+name = "clinical-data-quality-analysis"
+version = "0.1.0"
+
+requires-python = ">=3.9" # Minimum supported Python version
+
+# Core dependencies for data loading and analysis
+dependencies = [
+  "pandas",
+  "numpy",
+  "pyyaml",      # For YAML-based configuration
+  "matplotlib", # For data quality visualisation
+]

@@ -1,0 +1,9 @@
+missing_values:
+  max_missing_ratio: 0.3
+  placeholders: ["?", "NA", "N/A", ""]
+  strategy: "ignore"
+
+outliers:
+  method: iqr
+  iqr_multiplier: 1.5
+  numeric_only: true
