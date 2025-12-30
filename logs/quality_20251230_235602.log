@@ -1,0 +1,50 @@
+2025-12-30 23:56:02,778 - INFO - Starting clinical data quality analysis
+2025-12-30 23:56:02,783 - INFO - Configuration loaded from: config/config.yaml
+2025-12-30 23:56:02,783 - INFO - Loading dataset from: data/diabetic_data.csv
+2025-12-30 23:56:03,445 - INFO - Dataset overview: rows=101766, columns=50
+2025-12-30 23:56:03,606 - INFO - Missing value summary calculated
+2025-12-30 23:56:03,607 - WARNING - Missing values detected (max_ratio=0.95, column=max_glu_serum)
+2025-12-30 23:56:03,608 - ERROR - Critical missing data level detected (max_ratio=0.95, column=max_glu_serum)
+2025-12-30 23:56:03,749 - INFO - Numeric summary calculated for 13 numeric columns
+2025-12-30 23:56:03,766 - WARNING - Exclusion candidates identified: 2 columns exceed missing ratio 0.30
+2025-12-30 23:56:03,766 - WARNING - Candidate column: max_glu_serum (missing_ratio=0.95)
+2025-12-30 23:56:03,766 - WARNING - Candidate column: A1Cresult (missing_ratio=0.83)
+2025-12-30 23:56:03,819 - INFO - Categorical summary started for 37 columns
+2025-12-30 23:56:03,826 - INFO - Categorical column 'race': 6 unique values
+2025-12-30 23:56:03,831 - INFO - Categorical column 'gender': 3 unique values
+2025-12-30 23:56:03,835 - INFO - Categorical column 'age': 10 unique values
+2025-12-30 23:56:03,839 - INFO - Categorical column 'weight': 10 unique values
+2025-12-30 23:56:03,843 - INFO - Categorical column 'payer_code': 18 unique values
+2025-12-30 23:56:03,847 - INFO - Categorical column 'medical_specialty': 73 unique values
+2025-12-30 23:56:03,857 - INFO - Categorical column 'diag_1': 717 unique values
+2025-12-30 23:56:03,879 - INFO - Categorical column 'diag_2': 749 unique values
+2025-12-30 23:56:03,891 - INFO - Categorical column 'diag_3': 790 unique values
+2025-12-30 23:56:03,895 - INFO - Categorical column 'max_glu_serum': 4 unique values
+2025-12-30 23:56:03,908 - INFO - Categorical column 'A1Cresult': 4 unique values
+2025-12-30 23:56:03,918 - INFO - Categorical column 'metformin': 4 unique values
+2025-12-30 23:56:03,926 - INFO - Categorical column 'repaglinide': 4 unique values
+2025-12-30 23:56:03,938 - INFO - Categorical column 'nateglinide': 4 unique values
+2025-12-30 23:56:03,949 - INFO - Categorical column 'chlorpropamide': 4 unique values
+2025-12-30 23:56:03,955 - INFO - Categorical column 'glimepiride': 4 unique values
+2025-12-30 23:56:03,958 - INFO - Categorical column 'acetohexamide': 2 unique values
+2025-12-30 23:56:03,965 - INFO - Categorical column 'glipizide': 4 unique values
+2025-12-30 23:56:03,972 - INFO - Categorical column 'glyburide': 4 unique values
+2025-12-30 23:56:03,980 - INFO - Categorical column 'tolbutamide': 2 unique values
+2025-12-30 23:56:03,982 - INFO - Categorical column 'pioglitazone': 4 unique values
+2025-12-30 23:56:03,991 - INFO - Categorical column 'rosiglitazone': 4 unique values
+2025-12-30 23:56:03,999 - INFO - Categorical column 'acarbose': 4 unique values
+2025-12-30 23:56:04,003 - INFO - Categorical column 'miglitol': 4 unique values
+2025-12-30 23:56:04,008 - INFO - Categorical column 'troglitazone': 2 unique values
+2025-12-30 23:56:04,015 - INFO - Categorical column 'tolazamide': 3 unique values
+2025-12-30 23:56:04,021 - INFO - Categorical column 'examide': 1 unique values
+2025-12-30 23:56:04,029 - INFO - Categorical column 'citoglipton': 1 unique values
+2025-12-30 23:56:04,035 - INFO - Categorical column 'insulin': 4 unique values
+2025-12-30 23:56:04,043 - INFO - Categorical column 'glyburide-metformin': 4 unique values
+2025-12-30 23:56:04,049 - INFO - Categorical column 'glipizide-metformin': 2 unique values
+2025-12-30 23:56:04,054 - INFO - Categorical column 'glimepiride-pioglitazone': 2 unique values
+2025-12-30 23:56:04,058 - INFO - Categorical column 'metformin-rosiglitazone': 2 unique values
+2025-12-30 23:56:04,065 - INFO - Categorical column 'metformin-pioglitazone': 2 unique values
+2025-12-30 23:56:04,065 - INFO - Categorical column 'change': 2 unique values
+2025-12-30 23:56:04,105 - INFO - Categorical column 'diabetesMed': 2 unique values
+2025-12-30 23:56:04,112 - INFO - Categorical column 'readmitted': 3 unique values
+2025-12-30 23:56:04,172 - INFO - Data quality analysis completed successfully

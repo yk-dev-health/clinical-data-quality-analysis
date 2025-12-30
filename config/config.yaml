@@ -7,6 +7,9 @@ quality:
 
   numeric_summary:
     enabled: true
+  
+  categorical:
+    report_top_n_values: 5
 
 missing_values:
   max_missing_ratio: 0.3

@@ -4,6 +4,7 @@ from quality import (
     missing_summary,
     numeric_summary,
     exclusion_candidates,
+    categorical_summary,
 )
 from logging_utils import setup_logger
 from config_loader import load_config
@@ -25,29 +26,34 @@ def main():
 
     # Dataset overview
     overview = dataset_overview(df, logger)
-
     print("=== Dataset Overview ===")
     print(overview)
 
     # Missing values analysis
     missing = missing_summary(df, logger, config)
-
     print("\n=== Missing Value Summary (Top columns) ===")
-    print(missing.head())
+    top_n = config["quality"]["missing"]["report_top_n_columns"]
+    print(missing.head(top_n))
 
-    # Numeric summary
-    numeric = numeric_summary(df, logger)
+    # Numeric summary (optional)
+    if config["quality"]["numeric_summary"]["enabled"]:
+        numeric = numeric_summary(df, logger)
+        print("\n=== Numeric Summary (Top rows) ===")
+        print(numeric.head())
 
-    print("\n=== Numeric Summary (Top rows) ===")
-    print(numeric.head())
-
+    # Exclusion candidates (decision support only)
     candidates = exclusion_candidates(missing, logger, config)
-
     print("\n=== Exclusion Candidates (Decision Support) ===")
     print(candidates)
 
-    logger.info("Data quality analysis completed successfully")
+    # Categorical summary (decision support)
+    categorical = categorical_summary(df, logger, config)
+    print("\n=== Categorical Summary (Top values per column) ===")
+    for col, summary in categorical.items():
+        print(f"\n[{col}]")
+        print(summary)
 
+    logger.info("Data quality analysis completed successfully")
 
 if __name__ == "__main__":
     main()
