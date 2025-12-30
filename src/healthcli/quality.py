@@ -80,3 +80,34 @@ def numeric_summary(df: pd.DataFrame, logger: logging.Logger,) -> pd.DataFrame:
     )
 
     return summary
+
+
+def exclusion_candidates(missing_summary: pd.DataFrame, logger: logging.Logger, config: Dict[str, Any],
+) -> pd.DataFrame:
+    """
+    Identify columns that should be considered for exclusion
+    due to high missing ratios (decision support only).
+    """
+    threshold = config["quality"]["missing"]["exclusion_candidate_threshold"]
+
+    candidates = missing_summary[
+        missing_summary["missing_ratio"] >= threshold
+    ]
+
+    if candidates.empty:
+        logger.info("No exclusion candidates identified based on missing ratio")
+    else:
+        logger.warning(
+            "Exclusion candidates identified: %d columns exceed missing ratio %.2f",
+            candidates.shape[0],
+            threshold,
+        )
+
+        for col, row in candidates.iterrows():
+            logger.warning(
+                "Candidate column: %s (missing_ratio=%.2f)",
+                col,
+                row["missing_ratio"],
+            )
+
+    return candidates

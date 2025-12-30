@@ -3,10 +3,10 @@ from quality import (
     dataset_overview,
     missing_summary,
     numeric_summary,
+    exclusion_candidates,
 )
 from logging_utils import setup_logger
 from config_loader import load_config
-
 
 def main():
     data_path = "data/diabetic_data.csv"
@@ -40,6 +40,11 @@ def main():
 
     print("\n=== Numeric Summary (Top rows) ===")
     print(numeric.head())
+
+    candidates = exclusion_candidates(missing, logger, config)
+
+    print("\n=== Exclusion Candidates (Decision Support) ===")
+    print(candidates)
 
     logger.info("Data quality analysis completed successfully")
 

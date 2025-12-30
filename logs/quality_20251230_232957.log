@@ -1,0 +1,12 @@
+2025-12-30 23:29:57,059 - INFO - Starting clinical data quality analysis
+2025-12-30 23:29:57,065 - INFO - Configuration loaded from: config/config.yaml
+2025-12-30 23:29:57,065 - INFO - Loading dataset from: data/diabetic_data.csv
+2025-12-30 23:29:57,883 - INFO - Dataset overview: rows=101766, columns=50
+2025-12-30 23:29:58,071 - INFO - Missing value summary calculated
+2025-12-30 23:29:58,071 - WARNING - Missing values detected (max_ratio=0.95, column=max_glu_serum)
+2025-12-30 23:29:58,071 - ERROR - Critical missing data level detected (max_ratio=0.95, column=max_glu_serum)
+2025-12-30 23:29:58,227 - INFO - Numeric summary calculated for 13 numeric columns
+2025-12-30 23:29:58,268 - WARNING - Exclusion candidates identified: 2 columns exceed missing ratio 0.30
+2025-12-30 23:29:58,283 - WARNING - Candidate column: max_glu_serum (missing_ratio=0.95)
+2025-12-30 23:29:58,283 - WARNING - Candidate column: A1Cresult (missing_ratio=0.83)
+2025-12-30 23:29:58,295 - INFO - Data quality analysis completed successfully
