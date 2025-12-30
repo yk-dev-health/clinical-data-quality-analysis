@@ -13,11 +13,13 @@ def main():
     data_path = "data/diabetic_data.csv"
     config_path = "config/config.yaml"
 
-    logger = setup_logger()
-    logger.info("Starting clinical data quality analysis")
-
     # Load config
     config = load_config(config_path)
+    log_level = config["logging"]["level"]
+    log_dir = config["logging"]["log_dir"]
+
+    logger = setup_logger(__name__, level=log_level, log_dir=log_dir)
+    logger.info("Starting clinical data quality analysis")
     logger.info("Configuration loaded from: %s", config_path)
 
     # Load data

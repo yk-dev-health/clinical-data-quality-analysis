@@ -112,11 +112,7 @@ def exclusion_candidates(missing_summary: pd.DataFrame, logger: logging.Logger, 
 
     return candidates
 
-def categorical_summary(
-    df: pd.DataFrame,
-    logger: logging.Logger,
-    config: Dict[str, Any],
-) -> Dict[str, pd.Series]:
+def categorical_summary(df: pd.DataFrame, logger: logging.Logger, config: Dict[str, Any],) -> Dict[str, pd.Series]:
     """
     Summarise value counts for categorical columns.
     """
@@ -131,10 +127,8 @@ def categorical_summary(
         value_counts = df[col].value_counts(dropna=False)
         summaries[col] = value_counts.head(top_n)
 
-        logger.info(
-            "Categorical column '%s': %d unique values",
-            col,
-            value_counts.shape[0],
-        )
+        logger.debug("Categorical column '%s': %d unique values", col, value_counts.shape[0],)
+        
+    logger.info("Categorical summary completed (%d columns analysed)", len(cat_cols),)
 
     return summaries

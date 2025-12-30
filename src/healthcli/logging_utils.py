@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-def setup_logger(name: str = "healthcli", log_dir: str = "logs") -> logging.Logger:
+def setup_logger(name: str = "healthcli", level: str = "INFO", log_dir: str = "logs") -> logging.Logger:
     """ 
     Set up a logger that logs to both console and a file with timestamps.
     """
@@ -13,7 +13,7 @@ def setup_logger(name: str = "healthcli", log_dir: str = "logs") -> logging.Logg
     log_file = Path(log_dir) / f"quality_{timestamp}.log"
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
 
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s") # format for log messages
 

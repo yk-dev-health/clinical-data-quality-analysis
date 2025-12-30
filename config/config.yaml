@@ -22,4 +22,5 @@ outliers:
   numeric_only: true
 
 logging:
-  level: INFO
+  level: DEBUG
+  log_dir: logs

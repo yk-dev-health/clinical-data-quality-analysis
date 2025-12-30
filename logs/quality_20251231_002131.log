@@ -1,0 +1,51 @@
+2025-12-31 00:21:31,155 - INFO - Starting clinical data quality analysis
+2025-12-31 00:21:31,165 - INFO - Configuration loaded from: config/config.yaml
+2025-12-31 00:21:31,165 - INFO - Loading dataset from: data/diabetic_data.csv
+2025-12-31 00:21:31,539 - INFO - Dataset overview: rows=101766, columns=50
+2025-12-31 00:21:31,650 - INFO - Missing value summary calculated
+2025-12-31 00:21:31,650 - WARNING - Missing values detected (max_ratio=0.95, column=max_glu_serum)
+2025-12-31 00:21:31,650 - ERROR - Critical missing data level detected (max_ratio=0.95, column=max_glu_serum)
+2025-12-31 00:21:31,725 - INFO - Numeric summary calculated for 13 numeric columns
+2025-12-31 00:21:31,729 - WARNING - Exclusion candidates identified: 2 columns exceed missing ratio 0.30
+2025-12-31 00:21:31,729 - WARNING - Candidate column: max_glu_serum (missing_ratio=0.95)
+2025-12-31 00:21:31,729 - WARNING - Candidate column: A1Cresult (missing_ratio=0.83)
+2025-12-31 00:21:31,765 - INFO - Categorical summary started for 37 columns
+2025-12-31 00:21:31,770 - DEBUG - Categorical column 'race': 6 unique values
+2025-12-31 00:21:31,774 - DEBUG - Categorical column 'gender': 3 unique values
+2025-12-31 00:21:31,776 - DEBUG - Categorical column 'age': 10 unique values
+2025-12-31 00:21:31,778 - DEBUG - Categorical column 'weight': 10 unique values
+2025-12-31 00:21:31,781 - DEBUG - Categorical column 'payer_code': 18 unique values
+2025-12-31 00:21:31,785 - DEBUG - Categorical column 'medical_specialty': 73 unique values
+2025-12-31 00:21:31,788 - DEBUG - Categorical column 'diag_1': 717 unique values
+2025-12-31 00:21:31,789 - DEBUG - Categorical column 'diag_2': 749 unique values
+2025-12-31 00:21:31,794 - DEBUG - Categorical column 'diag_3': 790 unique values
+2025-12-31 00:21:31,796 - DEBUG - Categorical column 'max_glu_serum': 4 unique values
+2025-12-31 00:21:31,799 - DEBUG - Categorical column 'A1Cresult': 4 unique values
+2025-12-31 00:21:31,801 - DEBUG - Categorical column 'metformin': 4 unique values
+2025-12-31 00:21:31,804 - DEBUG - Categorical column 'repaglinide': 4 unique values
+2025-12-31 00:21:31,807 - DEBUG - Categorical column 'nateglinide': 4 unique values
+2025-12-31 00:21:31,810 - DEBUG - Categorical column 'chlorpropamide': 4 unique values
+2025-12-31 00:21:31,812 - DEBUG - Categorical column 'glimepiride': 4 unique values
+2025-12-31 00:21:31,815 - DEBUG - Categorical column 'acetohexamide': 2 unique values
+2025-12-31 00:21:31,818 - DEBUG - Categorical column 'glipizide': 4 unique values
+2025-12-31 00:21:31,820 - DEBUG - Categorical column 'glyburide': 4 unique values
+2025-12-31 00:21:31,823 - DEBUG - Categorical column 'tolbutamide': 2 unique values
+2025-12-31 00:21:31,825 - DEBUG - Categorical column 'pioglitazone': 4 unique values
+2025-12-31 00:21:31,827 - DEBUG - Categorical column 'rosiglitazone': 4 unique values
+2025-12-31 00:21:31,829 - DEBUG - Categorical column 'acarbose': 4 unique values
+2025-12-31 00:21:31,834 - DEBUG - Categorical column 'miglitol': 4 unique values
+2025-12-31 00:21:31,836 - DEBUG - Categorical column 'troglitazone': 2 unique values
+2025-12-31 00:21:31,838 - DEBUG - Categorical column 'tolazamide': 3 unique values
+2025-12-31 00:21:31,841 - DEBUG - Categorical column 'examide': 1 unique values
+2025-12-31 00:21:31,843 - DEBUG - Categorical column 'citoglipton': 1 unique values
+2025-12-31 00:21:31,847 - DEBUG - Categorical column 'insulin': 4 unique values
+2025-12-31 00:21:31,850 - DEBUG - Categorical column 'glyburide-metformin': 4 unique values
+2025-12-31 00:21:31,853 - DEBUG - Categorical column 'glipizide-metformin': 2 unique values
+2025-12-31 00:21:31,855 - DEBUG - Categorical column 'glimepiride-pioglitazone': 2 unique values
+2025-12-31 00:21:31,858 - DEBUG - Categorical column 'metformin-rosiglitazone': 2 unique values
+2025-12-31 00:21:31,872 - DEBUG - Categorical column 'metformin-pioglitazone': 2 unique values
+2025-12-31 00:21:31,880 - DEBUG - Categorical column 'change': 2 unique values
+2025-12-31 00:21:31,904 - DEBUG - Categorical column 'diabetesMed': 2 unique values
+2025-12-31 00:21:31,904 - DEBUG - Categorical column 'readmitted': 3 unique values
+2025-12-31 00:21:31,904 - INFO - Categorical summary completed (37 columns analysed)
+2025-12-31 00:21:31,941 - INFO - Data quality analysis completed successfully
