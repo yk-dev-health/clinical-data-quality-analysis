@@ -1,2 +1,3 @@
-data
+data/Docs
+data/diabetic_data.csv
 __pycache__
