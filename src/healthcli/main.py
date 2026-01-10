@@ -1,3 +1,15 @@
+"""
+Entry point for clinical data quality analysis.
+
+This module controls the overall workflow of the analysis.
+It loads the configuration and dataset, runs data quality checks,
+and logs results for transparency.
+
+This file does not contain analysis logic.
+All analysis steps are implemented in separate modules
+to keep the pipeline simple, reusable, and easy to test.
+"""
+
 from data_loader import load_csv_data
 from quality import (
     dataset_overview,
@@ -10,10 +22,15 @@ from logging_utils import setup_logger
 from config_loader import load_config
 
 def main():
+    """
+    This function loads the configuration and dataset,
+    runs each data quality check, and manages logging.
+    """
+
     data_path = "data/diabetic_data.csv"
     config_path = "config/config.yaml"
 
-    # Load config
+    # Load config for logging and analysis parameters
     config = load_config(config_path)
     log_level = config["logging"]["level"]
     log_dir = config["logging"]["log_dir"]
@@ -37,7 +54,7 @@ def main():
     top_n = config["quality"]["missing"]["report_top_n_columns"]
     print(missing.head(top_n))
 
-    # Numeric summary (optional)
+    # Numeric summary (decision support)
     if config["quality"]["numeric_summary"]["enabled"]:
         numeric = numeric_summary(df, logger)
         print("\n=== Numeric Summary (Top rows) ===")
