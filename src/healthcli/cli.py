@@ -1,12 +1,20 @@
 import argparse
 
-# NOTE:
-# This module defines the command line interface (CLI) structure only.
-# The actual analysis logic is implemented in separate modules
-# (e.g. quality.py, analysis.py).
+"""
+Command line interface (CLI) definition for the project.
+
+This module defines available commands and arguments only.
+It does not contain any data processing or analysis logic.
+
+Actual analysis is implemented in separate modules
+(e.g. quality.py, analysis.py).
+"""
 
 def build_parser():
-    """ This parser defines the overall purpose and available subcommands."""
+    """
+    Create and return the argument parser for the CLI.
+    This function defines available commands and their arguments.
+    """
     
     parser = argparse.ArgumentParser(
         prog="healthcli",
