@@ -8,33 +8,59 @@ import pandas as pd
 @dataclass
 class RuleResult:
     """
-    Docstring for RuleResult
+    Simple data container for the output of a single data quality rule.
+
+    @dataclass is used here to automatically generate:
+    __init__
+    __repr__
+    __eq__
+
+    This avoids boilerplate code and clearly signals that this class
+    exists only to hold structured data.
     """
-    rule: str
-    severity: str  # "OK", "WARNING", "ERROR"
-    message: str
-    affected_rows: Optional[int] = None
+    rule: str                            # Name of the rule that produced this result
+    severity: str                        # "OK", "WARNING", or "ERROR"
+    message: str                         # Human-readable explanation
+    affected_rows: Optional[int] = None  # Optional quantitative impact
 
 
 class ClinicalRule(ABC):
     """
-    Internal abstract base class that defines the contract for all clinical data quality checks
+    Abstract Base Class defining the interface for all clinical data quality rules.
+
+    This class does NOT implement any rule logic itself.
+    Instead, it defines a contract that all concrete rules must follow.
+
+    @abstractmethod is used to enforce that:
+    - every subclass MUST implement apply()
+    - incomplete rule implementations fail fast at runtime
     """
-    name: str
+    name: str  # Identifier used for reporting and logging
 
     @abstractmethod
     def apply(self, df: pd.DataFrame) -> List[RuleResult]:
+        """
+        Execute the rule against the input DataFrame.
+
+        Must be implemented by all subclasses.
+        Returns one or more RuleResult objects.
+        """
         pass
 
 
 class PatientSexConsistencyRule(ClinicalRule):
     """
-    Checks whether a single patient_id is associated with multiple sex values.
+    Concrete implementation of a clinical data quality rule.
+
+    This rule checks whether a single patient_id is associated
+    with multiple recorded sex values, which may indicate data entry or linkage errors.
     """
     name = "patient_sex_consistency"
 
     def apply(self, df: pd.DataFrame) -> List[RuleResult]:
-        """ Apply the patient sex consistency rule. """
+        """
+        Implements the rule-specific logic defined by the ClinicalRule contract.
+        """
         if "patient_id" not in df.columns or "sex" not in df.columns:
             return [
                 RuleResult(
@@ -44,6 +70,7 @@ class PatientSexConsistencyRule(ClinicalRule):
                 )
             ]
 
+        # Count number of unique sex values per patient
         inconsistent = (
             df.groupby("patient_id")["sex"]
             .nunique(dropna=True)
@@ -71,11 +98,15 @@ class PatientSexConsistencyRule(ClinicalRule):
     
 class AgePlausibilityRule(ClinicalRule):
     """
-    Checks whether age values are within a plausible human range.
+    Concrete rule checking whether age values fall within a plausible human range.
+    This is a general sanity check and does not encode dataset or disease specific clinical criteria.
     """
     name = "age_plausibility"
 
-    def apply(self, df: pd.DataFrame) -> list[RuleResult]:
+    def apply(self, df: pd.DataFrame) -> List[RuleResult]:
+        """
+        Rule-specific implementation required by ClinicalRule.
+        """
         if "age" not in df.columns:
             return [
                 RuleResult(
@@ -85,6 +116,7 @@ class AgePlausibilityRule(ClinicalRule):
                 )
             ]
 
+        # Identify implausible values
         invalid = df[(df["age"] < 0) | (df["age"] > 120)]
 
         if invalid.empty:
@@ -96,7 +128,7 @@ class AgePlausibilityRule(ClinicalRule):
                     affected_rows=0,
                 )
             ]
-
+        
         return [
             RuleResult(
                 rule=self.name,
