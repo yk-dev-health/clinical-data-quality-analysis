@@ -1,13 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "clinical-data-quality-analysis"
 version = "0.1.0"
+description = "A clinical data quality toolkit for healthcare datasets."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Clinical Data Quality Analysis Team" }
+]
+keywords = ["healthcare", "clinical", "data quality", "ETL", "pipeline"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
 
-requires-python = ">=3.9" # Minimum supported Python version
-
-# Core dependencies for data loading and analysis
 dependencies = [
   "pandas",
   "numpy",
-  "pyyaml",      # For YAML-based configuration
-  "matplotlib", # For data quality visualisation
+  "pyyaml",
+  "matplotlib",
 ]
+
+[project.scripts]
+healthcli = "healthcli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
