@@ -1,3 +1,15 @@
 data/Docs
 data/diabetic_data.csv
 __pycache__
+
+# Runtime and local artifacts
+logs/
+output/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+.idea/

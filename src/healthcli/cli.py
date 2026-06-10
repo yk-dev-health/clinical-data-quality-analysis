@@ -44,4 +44,27 @@ def build_parser():
         help="Path to the analysis configuration file (YAML)"
     )
 
+    # pipeline command
+    pipeline_parser = subparsers.add_parser(
+        "pipeline",
+        help="Run a simple ingest/validate/transform data pipeline"
+    )
+
+    pipeline_parser.add_argument(
+        "--data",
+        required=True,
+        help="Path to the clinical CSV dataset"
+    )
+
+    pipeline_parser.add_argument(
+        "--config",
+        help="Path to the pipeline configuration file (YAML)"
+    )
+
+    pipeline_parser.add_argument(
+        "--output",
+        help="Directory to write pipeline outputs (reports, artifacts)",
+        default="./output"
+    )
+
     return parser

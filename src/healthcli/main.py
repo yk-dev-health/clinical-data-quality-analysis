@@ -14,6 +14,7 @@ from healthcli.cli import build_parser
 from healthcli.config_loader import load_config
 from healthcli.data_loader import load_csv_data
 from healthcli.logging_utils import setup_logger
+from healthcli.pipeline import run_pipeline
 from healthcli.quality import (
     categorical_summary,
     dataset_overview,
@@ -71,6 +72,10 @@ def main(argv=None) -> int:
     if args.command == "quality":
         config_path = args.config or "config/config.yaml"
         return run_quality(args.data, config_path)
+    if args.command == "pipeline":
+        config_path = args.config or "config/config.yaml"
+        output_dir = args.output or "output"
+        return run_pipeline(args.data, config_path, output_dir)
 
     parser.print_help()
     return 1
