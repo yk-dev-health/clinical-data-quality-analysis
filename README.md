@@ -117,6 +117,26 @@ The pipeline can be safely executed multiple times.
 * Reproducible Data Pipelines
 * Python Refactoring
 
+## Usage
+
+### Quality analysis
+
+Run the rule-based quality analysis for a clinical dataset:
+
+```bash
+healthcli quality --data data/diabetic_data.csv --config config/config.yaml
+```
+
+### Pipeline execution
+
+Run the reproducible ingest/validate/transform pipeline and write outputs:
+
+```bash
+healthcli pipeline --data data/diabetic_data.csv --config config/config.yaml --output output
+```
+
+The pipeline writes `missing_summary.csv` to the configured output directory and logs progress to the `logs/` folder.
+
 
 ## Tech Stack
 
