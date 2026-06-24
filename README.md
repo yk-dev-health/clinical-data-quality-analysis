@@ -78,6 +78,61 @@ Detects missing values, invalid ranges, and clinically unrealistic values.
 
 The same input always produces the same validation outcome.
 
+## FHIR-Inspired Data Models
+
+The toolkit includes **Pydantic-based models** that enforce type safety and medical plausibility:
+
+- **Patient**: Encodes demographics (ID, gender, birth date) with automatic age calculation and future-date validation.
+- **Observation**: Base model for clinical measurements with structured fields (code, subject, value, timestamp).
+- **VitalSigns**: Specialized Observation with physiological range validation:
+  - Systolic BP: 50–250 mmHg
+  - Heart Rate: 30–200 bpm
+  - Temperature: 35–42 °C
+  - SpO₂: 50–100%
+
+These models provide structured validation without requiring full FHIR compliance, making them suitable for real-world EHR data.
+
+## Clinical Domain-Specific Validation Rules
+
+### ClinicalCoherenceRule
+Detects age/lab value mismatches that indicate data errors or critical conditions:
+- Pediatric hyperglycemia: Age < 12 AND glucose > 300 mg/dL (unusual, flags for review)
+- Geriatric renal impairment: Age ≥ 65 AND creatinine > 2.0 mg/dL (expected but worth tracking)
+
+### VitalSignAnomalyRule
+Detects temporal anomalies in vital sign sequences:
+- Flags measurements that change > 50% between consecutive readings for the same patient.
+- Identifies likely data entry errors or equipment malfunctions.
+
+### MissingDataThresholdRule
+Context-aware missing data detection with domain-specific thresholds:
+- `patient_id`: 0% (required)
+- `age`: 5% (essential demographic)
+- Lab values: 20% (not always ordered)
+- Vital signs: 30% (hand-entered, time-dependent)
+
+## Quality Report Generation
+
+The toolkit generates professional **HTML and PDF reports** with:
+
+- **Missing Data Analysis**: Table and visualization of missing values by column.
+- **Clinical Validation Summary**: Results from all clinical rules with violation counts and affected rows.
+- **Data Completeness Metrics**: Overall dataset completeness percentage and record count.
+- **Professional Styling**: Color-coded severity indicators (✓ LOW, ⚠ MODERATE, ⚠ HIGH).
+
+**Why HTML + PDF?**
+- **HTML**: Immediate web-based preview and dashboard integration.
+- **PDF**: Audit trail and regulatory compliance (HIPAA, GDPR, NHS requirements demand immutable records).
+
+### Generate a Report
+
+```bash
+healthcli pipeline --data data/diabetic_data.csv --config config/config.yaml --output output
+# Generates:
+#   - output/missing_summary.csv
+#   - output/quality_report.html
+#   - output/quality_report.pdf (if WeasyPrint installed)
+```
 
 ## Design Decisions
 
@@ -140,9 +195,13 @@ The pipeline writes `missing_summary.csv` to the configured output directory and
 
 ## Tech Stack
 
-* Python
-* Pandas
-* openpyxl
+* **Python 3.9+**
+* **Pandas & NumPy**: Data manipulation and numerical operations
+* **Pydantic v2**: Structured validation with type safety
+* **Jinja2**: HTML template rendering
+* **WeasyPrint**: HTML-to-PDF conversion
+* **Matplotlib**: Data visualization (missing data charts)
+* **PyYAML**: Configuration management
 
 
 ## Real-World Relevance
