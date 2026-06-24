@@ -26,6 +26,8 @@ dependencies = [
   "pyyaml",
   "matplotlib",
   "pydantic>=2.0",
+  "jinja2",
+  "weasyprint",
 ]
 
 [project.scripts]
