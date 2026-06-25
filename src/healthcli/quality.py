@@ -1,6 +1,9 @@
 import pandas as pd
 import logging
 from typing import Dict, Any
+from pydantic import ValidationError
+
+from healthcli.fhir_models import Observation, Patient, VitalSigns
 
 
 def dataset_overview(df: pd.DataFrame, logger: logging.Logger) -> Dict[str, Any]:
@@ -59,6 +62,130 @@ def missing_summary(df: pd.DataFrame, logger: logging.Logger, config: Dict[str, 
             worst_column,
         )
 
+    return summary
+
+
+def _normalize_gender(value: Any) -> str:
+    if pd.isna(value):
+        return "unknown"
+
+    gender = str(value).strip().lower()
+    if gender in {"male", "female", "other", "unknown"}:
+        return gender
+
+    return "unknown"
+
+
+def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[str, Any]:
+    """
+    Validate dataset rows against FHIR-inspired Pydantic models.
+
+    This step is designed to demonstrate how clinical tabular data can be
+    mapped to patient and observation resources and validated deterministically.
+    """
+    summary = {
+        "patients_validated": 0,
+        "patient_errors": 0,
+        "observations_validated": 0,
+        "observation_errors": 0,
+        "errors": [],
+    }
+
+    # Patient-style validation
+    if {"patient_nbr", "gender"}.issubset(df.columns):
+        for idx, row in df.iterrows():
+            payload = {
+                "id": str(row["patient_nbr"]),
+                "gender": _normalize_gender(row.get("gender", "unknown")),
+            }
+            if "birthDate" in df.columns and pd.notna(row.get("birthDate")):
+                payload["birthDate"] = row["birthDate"]
+
+            try:
+                Patient(**payload)
+                summary["patients_validated"] += 1
+            except ValidationError as exc:
+                summary["patient_errors"] += 1
+                summary["errors"].append(f"Patient row {idx}: {exc}")
+    else:
+        logger.debug("FHIR patient validation skipped: required columns missing")
+
+    # Observation-style validation for key clinical measurement columns
+    lab_columns = ["max_glu_serum", "A1Cresult"]
+    if "patient_nbr" in df.columns and any(col in df.columns for col in lab_columns):
+        for col in lab_columns:
+            if col not in df.columns:
+                continue
+
+            for idx, row in df.iterrows():
+                if pd.isna(row[col]):
+                    continue
+
+                try:
+                    value = float(row[col])
+                except (TypeError, ValueError):
+                    summary["observation_errors"] += 1
+                    summary["errors"].append(f"Observation row {idx} column {col}: non-numeric value")
+                    continue
+
+                payload = {
+                    "id": f"obs-{idx}-{col}",
+                    "code": col,
+                    "subject": str(row["patient_nbr"]),
+                    "value": {"value": value, "unit": "mg/dL", "code": col},
+                }
+
+                try:
+                    Observation(**payload)
+                    summary["observations_validated"] += 1
+                except ValidationError as exc:
+                    summary["observation_errors"] += 1
+                    summary["errors"].append(f"Observation row {idx} column {col}: {exc}")
+    else:
+        logger.debug("FHIR observation validation skipped: required columns missing")
+
+    # Additional vital sign validation if the dataset contains those columns.
+    vital_sign_cols = {
+        "systolic_bp": "mmHg",
+        "heart_rate": "bpm",
+        "temperature": "C",
+        "spo2": "%",
+    }
+    if "patient_nbr" in df.columns:
+        for col, unit in vital_sign_cols.items():
+            if col not in df.columns:
+                continue
+
+            for idx, row in df.iterrows():
+                if pd.isna(row[col]):
+                    continue
+
+                try:
+                    value = float(row[col])
+                except (TypeError, ValueError):
+                    summary["observation_errors"] += 1
+                    summary["errors"].append(f"Vital sign row {idx} column {col}: non-numeric value")
+                    continue
+
+                payload = {
+                    "id": f"vital-{idx}-{col}",
+                    "code": col,
+                    "subject": str(row["patient_nbr"]),
+                    "value": {"value": value, "unit": unit, "code": col},
+                }
+
+                try:
+                    VitalSigns(**payload)
+                    summary["observations_validated"] += 1
+                except ValidationError as exc:
+                    summary["observation_errors"] += 1
+                    summary["errors"].append(f"Vital sign row {idx} column {col}: {exc}")
+
+    logger.info(
+        "FHIR-inspired validation completed: %d patients, %d observations",
+        summary["patients_validated"],
+        summary["observations_validated"],
+    )
     return summary
 
 
