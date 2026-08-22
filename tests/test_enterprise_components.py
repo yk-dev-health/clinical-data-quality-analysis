@@ -31,3 +31,4 @@ def test_observation_requires_loinc_shaped_code():
         )
 
     assert validate_loinc_code("2345-7")
+    assert not validate_loinc_code("2345-8")

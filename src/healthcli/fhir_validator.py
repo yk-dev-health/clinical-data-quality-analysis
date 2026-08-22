@@ -17,6 +17,18 @@ LOINC_PATTERN = re.compile(r"^\d{1,5}-\d$")
 SNOMED_PATTERN = re.compile(r"^\d{6,18}$")
 
 
+def _has_valid_loinc_check_digit(value: str) -> bool:
+    """Validate the Modulus 10 check digit used by LOINC identifiers."""
+    if not LOINC_PATTERN.fullmatch(value):
+        return False
+    digits, check_digit = value.split("-")
+    total = 0
+    for position, digit in enumerate(reversed(digits), start=1):
+        product = int(digit) * (2 if position % 2 else 1)
+        total += sum(int(part) for part in str(product))
+    return (10 - (total % 10)) % 10 == int(check_digit)
+
+
 class FHIRResource(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -34,8 +46,8 @@ class Coding(FHIRResource):
     @classmethod
     def validate_terminology_code(cls, value: str, info) -> str:
         system = info.data.get("system", "")
-        if system == "http://loinc.org" and not LOINC_PATTERN.fullmatch(value):
-            raise ValueError("LOINC code must have the form 'digits-check_digit'")
+        if system == "http://loinc.org" and not _has_valid_loinc_check_digit(value):
+            raise ValueError("LOINC code must have a valid Modulus 10 check digit")
         if system == "http://snomed.info/sct" and not SNOMED_PATTERN.fullmatch(value):
             raise ValueError("SNOMED CT code must contain 6 to 18 digits")
         return value
@@ -86,7 +98,7 @@ def validate_loinc_code(code: str) -> bool:
     This is a format stub, not a claim that the code exists in the current
     LOINC release. Existence should be checked against a licensed ValueSet.
     """
-    return bool(LOINC_PATTERN.fullmatch(code))
+    return _has_valid_loinc_check_digit(code)
 
 
 def validate_snomed_code(code: str) -> bool:

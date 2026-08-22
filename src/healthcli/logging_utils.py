@@ -2,6 +2,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import structlog
+
 
 def setup_logger(name: str = "healthcli", level: str = "INFO", log_dir: str = "logs") -> logging.Logger:
     """ 
@@ -15,7 +17,27 @@ def setup_logger(name: str = "healthcli", level: str = "INFO", log_dir: str = "l
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s") # format for log messages
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=structlog.processors.JSONRenderer(),
+        foreign_pre_chain=[
+            structlog.stdlib.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+        ],
+    )
+
+    structlog.configure(
+        processors=[
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
     # Headers are only added once to avoid duplicate logs
     if not logger.handlers:

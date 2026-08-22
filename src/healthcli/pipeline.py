@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Iterator, List, Tuple
 
 import pandas as pd
+from pydantic import ValidationError
 
 from healthcli.clinical_rules_extended import run_clinical_rules
 from healthcli.config_loader import load_config
@@ -37,7 +38,7 @@ def validate_fhir_chunk(frame: pd.DataFrame) -> Dict[str, int]:
             try:
                 Patient(id=str(getattr(row, "patient_nbr")), gender="unknown")
                 result["patients_validated"] += 1
-            except Exception:
+            except ValidationError:
                 result["patient_errors"] += 1
 
     loinc_columns = {"max_glu_serum": "2345-7", "A1Cresult": "4548-4"}
@@ -62,7 +63,7 @@ def validate_fhir_chunk(frame: pd.DataFrame) -> Dict[str, int]:
                         valueQuantity=Quantity(value=float(value), unit="mg/dL"),
                     )
                     result["observations_validated"] += 1
-                except Exception:
+                except (TypeError, ValueError, ValidationError):
                     result["observation_errors"] += 1
     return result
 
