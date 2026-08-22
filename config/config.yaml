@@ -24,3 +24,6 @@ outliers:
 logging:
   level: DEBUG
   log_dir: logs
+
+pipeline:
+  chunk_size: 10000
