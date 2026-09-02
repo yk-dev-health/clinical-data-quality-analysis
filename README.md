@@ -4,7 +4,7 @@ An auditable Python pipeline for finding structural, clinical, and interoperabil
 
 ## Executive summary
 
-Healthcare data can be syntactically valid and clinically unusable at the same time. This project combines deterministic clinical rules, strict Pydantic v2 resource validation, missingness analysis, and reproducible HTML/PDF reporting in one CLI workflow.
+Healthcare data can be syntactically valid and clinically unusable at the same time. This project combines deterministic clinical rules, a strict FHIR R4-inspired Pydantic v2 validation boundary, missingness analysis, and reproducible HTML/PDF reporting in one CLI workflow.
 
 ## System architecture
 
@@ -23,10 +23,10 @@ flowchart LR
 
 ## Key engineering accomplishments
 
-- **Up to 60% memory footprint reduction:** numeric downcasting and safe category conversion are measured per pass. The exact result is dataset-dependent and emitted as `before_bytes`, `after_bytes`, and `reduction_ratio`.
-- **FHIR R4 validation engine:** strict `Patient`, `Observation`, `Quantity`, `Reference`, and `CodeableConcept` models reject unknown fields, invalid identifiers, future birth dates, invalid ranges, and malformed LOINC/SNOMED CT code shapes.
-- **Bounded ingestion:** `iter_csv_chunks` processes large CSV inputs without requiring the reader to load the entire file at once. The report path currently materializes optimized chunks because the existing report generator needs a complete DataFrame; a production deployment can replace that sink with streaming aggregates.
-- **Zero-copy validation boundary:** validators consume mapped values and do not mutate the source frame. The optimizer is explicit about returning a transformed copy, which keeps audit comparisons deterministic.
+- **Measured memory optimization:** numeric downcasting and safe category conversion are measured per pass. The sample dataset achieved a 14.1% reduction; results are schema- and data-dependent and emitted as `before_bytes`, `after_bytes`, and `reduction_ratio`.
+- **FHIR R4-inspired validation boundary:** strict `Patient`, `Observation`, `Quantity`, `Reference`, and `CodeableConcept` models reject unknown fields, invalid identifiers, future birth dates, and malformed LOINC/SNOMED CT code shapes. This is not a complete FHIR conformance validator.
+- **Chunked ingestion:** `iter_csv_chunks` reads large CSV inputs incrementally. The current reporting path materializes optimized chunks into a final DataFrame, so it is not yet a fully streaming multi-GB architecture.
+- **Non-mutating validation:** validators consume mapped values without mutating the input frame. The optimizer intentionally returns a transformed copy, preserving a deterministic comparison boundary.
 - **Clinical rules:** missingness thresholds, demographic coherence, vital-sign plausibility, and temporal anomalies remain independently testable.
 
 ## Benchmark and performance data
@@ -35,8 +35,9 @@ These are representative engineering targets, not universal guarantees. Run the 
 
 | Workload | Execution mode | Expected engineering outcome |
 | --- | --- | --- |
-| 100k-row mixed CSV | One optimized pass | Lower resident memory; metrics emitted |
-| Multi-GB CSV | `chunksize` configured in pipeline | Bounded read memory and per-chunk progress logs |
+| Sample mixed CSV | One optimized pass | 14.1% measured memory reduction |
+| 100k-row mixed CSV | One optimized pass | Dataset-specific reduction metrics |
+| Multi-GB CSV | `chunksize` configured in pipeline | Incremental reads; final report still materializes data |
 | Low-cardinality strings | Pandas `category` | Dictionary encoding where it reduces deep memory |
 | FHIR resource mapping | Pydantic v2 | Deterministic accepted/rejected resource counts |
 
@@ -66,6 +67,21 @@ docker run --rm -v "${PWD}/data:/data" -v "${PWD}/output:/output" clinical-data-
 
 The pipeline produces `missing_summary.csv`, `quality_report.html`, and a PDF when WeasyPrint system dependencies are available. Logs belong in a controlled environment and must not contain direct identifiers.
 
+## Scope and planned production integrations
+
+This repository currently implements a local, batch-oriented CSV pipeline. Pub/Sub ingestion, Redis-backed idempotency, and BigQuery storage are **not implemented** and are not represented as completed capabilities. A production cloud deployment could evolve the current boundaries as follows:
+
+```mermaid
+flowchart LR
+	A[Pub/Sub event] --> B[Validation worker]
+	B --> C[Redis idempotency key]
+	B --> D[BigQuery raw table]
+	B --> E[BigQuery validated table]
+	B --> F[Dead-letter / rejected records]
+```
+
+The next engineering steps would be defining a versioned message schema, using an `event_id` or content hash for idempotent retries, writing raw and validated records to separate BigQuery tables, and adding emulator-based integration tests.
+
 ## Project layout
 
 ```text
@@ -82,7 +98,7 @@ tests/                       # Unit and integration tests
 
 ## Technology and engineering practice
 
-Python 3.9+, Pandas, NumPy, Pydantic v2, Jinja2, WeasyPrint, PyYAML, and structlog-compatible logging are used with a typed, testable module boundary. Development dependencies include pytest, coverage tooling, and mypy. CI should run formatting, mypy, unit tests, an integration pipeline run on the sample dataset, and dependency/security checks on every pull request.
+Python 3.9+, Pandas, NumPy, Pydantic v2, Jinja2, WeasyPrint, PyYAML, and `structlog` are used with a typed, testable module boundary. Development dependencies include pytest, coverage tooling, pandas stubs, and mypy. CI runs tests with coverage and mypy; formatting, security scanning, and cloud emulator integration tests remain recommended additions.
 
 ## Interview defense guide
 
