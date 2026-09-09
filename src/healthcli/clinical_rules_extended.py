@@ -153,6 +153,65 @@ class VitalSignAnomalyRule:
         return result
 
 
+class PatientSexConsistencyRule:
+    """
+    Flags patients whose records disagree on recorded sex, which may
+    indicate data entry or linkage errors.
+    """
+
+    def apply(self, df: pd.DataFrame, logger: logging.Logger = None) -> RuleResult:
+        result = RuleResult(rule_name="PatientSexConsistencyRule", severity="ERROR")
+
+        if "patient_id" not in df.columns or "sex" not in df.columns:
+            if logger:
+                logger.warning(
+                    f"{result.rule_name}: required columns (patient_id, sex) are missing"
+                )
+            return result
+
+        inconsistent_patients = (
+            df.groupby("patient_id")["sex"].nunique(dropna=True).loc[lambda x: x > 1].index
+        )
+        violations = df[df["patient_id"].isin(inconsistent_patients)].index.tolist()
+
+        result.violations = violations
+        result.count = len(violations)
+
+        if logger:
+            logger.warning(f"{result.rule_name}: found {result.count} patient-level sex inconsistencies")
+
+        return result
+
+
+class AgePlausibilityRule:
+    """
+    General sanity check that age values fall within a plausible human
+    range. Does not encode dataset- or disease-specific clinical criteria.
+    """
+
+    MIN_AGE = 0
+    MAX_AGE = 120
+
+    def apply(self, df: pd.DataFrame, logger: logging.Logger = None) -> RuleResult:
+        result = RuleResult(rule_name="AgePlausibilityRule", severity="WARNING")
+
+        if "age" not in df.columns:
+            if logger:
+                logger.warning(f"{result.rule_name}: column 'age' is missing")
+            return result
+
+        ages = pd.to_numeric(df["age"], errors="coerce")
+        invalid = df[(ages < self.MIN_AGE) | (ages > self.MAX_AGE)]
+
+        result.violations = invalid.index.tolist()
+        result.count = len(result.violations)
+
+        if logger:
+            logger.warning(f"{result.rule_name}: found {result.count} implausible age value(s)")
+
+        return result
+
+
 class MissingDataThresholdRule:
     """
     Context-aware missing data detection.
@@ -243,15 +302,21 @@ def run_clinical_rules(
         logger = logging.getLogger("healthcli.clinical_rules_extended")
     
     results = {}
-    
+
     # Run each rule
     coherence_rule = ClinicalCoherenceRule()
     results["ClinicalCoherenceRule"] = coherence_rule.apply(df, logger)
-    
+
     vital_anomaly_rule = VitalSignAnomalyRule()
     results["VitalSignAnomalyRule"] = vital_anomaly_rule.apply(df, logger)
-    
+
     missing_rule = MissingDataThresholdRule()
     results["MissingDataThresholdRule"] = missing_rule.apply(df, logger=logger)
-    
+
+    sex_consistency_rule = PatientSexConsistencyRule()
+    results["PatientSexConsistencyRule"] = sex_consistency_rule.apply(df, logger)
+
+    age_plausibility_rule = AgePlausibilityRule()
+    results["AgePlausibilityRule"] = age_plausibility_rule.apply(df, logger)
+
     return results
