@@ -27,3 +27,7 @@ logging:
 
 pipeline:
   chunk_size: 10000
+
+schema:
+  path: config/schema.yaml
+  fail_on_invalid: true

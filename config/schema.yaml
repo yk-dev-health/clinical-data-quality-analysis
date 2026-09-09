@@ -1,0 +1,35 @@
+# Dataset-level schema contract, validated before clinical rules execute.
+#
+# schema_version follows semver-lite (MAJOR.MINOR). Increment MAJOR when a
+# required column is added/removed or a type becomes stricter; increment
+# MINOR for additive, backwards-compatible changes (new optional column,
+# widened vocabulary).
+schema_version: "1.0"
+
+columns:
+  patient_nbr:
+    required: true
+    dtype: string
+  gender:
+    required: true
+    dtype: string
+    vocabulary: [Male, Female, Unknown/Invalid]
+  age:
+    required: true
+    dtype: string
+  max_glu_serum:
+    required: false
+    dtype: string
+    vocabulary: [None, Norm, ">200", ">300"]
+  A1Cresult:
+    required: false
+    dtype: string
+    vocabulary: [None, Norm, ">7", ">8"]
+  change:
+    required: false
+    dtype: string
+    vocabulary: ["No", "Ch"]
+  diabetesMed:
+    required: false
+    dtype: string
+    vocabulary: ["Yes", "No"]
