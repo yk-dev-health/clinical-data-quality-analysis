@@ -14,7 +14,7 @@ from healthcli.cli import build_parser
 from healthcli.config_loader import load_config
 from healthcli.data_loader import load_csv_data
 from healthcli.logging_utils import setup_logger
-from healthcli.pipeline import run_pipeline
+from healthcli.pipeline import run_pipeline, run_pipeline_streaming
 from healthcli.quality import (
     categorical_summary,
     dataset_overview,
@@ -75,6 +75,8 @@ def main(argv=None) -> int:
     if args.command == "pipeline":
         config_path = args.config or "config/config.yaml"
         output_dir = args.output or "output"
+        if getattr(args, "streaming", False):
+            return run_pipeline_streaming(args.data, config_path, output_dir)
         return run_pipeline(args.data, config_path, output_dir)
 
     parser.print_help()

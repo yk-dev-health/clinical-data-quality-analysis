@@ -67,4 +67,14 @@ def build_parser():
         default="./output"
     )
 
+    pipeline_parser.add_argument(
+        "--streaming",
+        action="store_true",
+        help=(
+            "Stream chunks directly to a Parquet sink instead of materializing "
+            "a single in-memory DataFrame. Scales to multi-GB inputs but skips "
+            "the row-level HTML/PDF report."
+        ),
+    )
+
     return parser
