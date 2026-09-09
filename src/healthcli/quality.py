@@ -76,6 +76,19 @@ def _normalize_gender(value: Any) -> str:
     return "unknown"
 
 
+def _describe_validation_error(resource: str, row_index: Any, exc: ValidationError) -> str:
+    """Summarize a Pydantic ValidationError by field and error type only.
+
+    `str(exc)` and `exc.errors()` both embed the rejected value by default
+    (Pydantic's `input_value`), which would leak raw field data -- including
+    patient identifiers -- into logs and the HTML report. This keeps only
+    the row position, the offending field path, and the error category.
+    """
+    field_errors = exc.errors(include_url=False, include_input=False, include_context=False)
+    reasons = ", ".join(f"{'.'.join(str(p) for p in e['loc']) or resource}:{e['type']}" for e in field_errors)
+    return f"{resource} row {row_index}: {reasons}"
+
+
 def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[str, Any]:
     """
     Validate dataset rows against FHIR-inspired Pydantic models.
@@ -106,7 +119,7 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
                 summary["patients_validated"] += 1
             except ValidationError as exc:
                 summary["patient_errors"] += 1
-                summary["errors"].append(f"Patient row {idx}: {exc}")
+                summary["errors"].append(_describe_validation_error("Patient", idx, exc))
     else:
         logger.debug("FHIR patient validation skipped: required columns missing")
 
@@ -140,7 +153,7 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
                     summary["observations_validated"] += 1
                 except ValidationError as exc:
                     summary["observation_errors"] += 1
-                    summary["errors"].append(f"Observation row {idx} column {col}: {exc}")
+                    summary["errors"].append(_describe_validation_error(f"Observation ({col})", idx, exc))
     else:
         logger.debug("FHIR observation validation skipped: required columns missing")
 
@@ -179,7 +192,7 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
                     summary["observations_validated"] += 1
                 except ValidationError as exc:
                     summary["observation_errors"] += 1
-                    summary["errors"].append(f"Vital sign row {idx} column {col}: {exc}")
+                    summary["errors"].append(_describe_validation_error(f"Vital sign ({col})", idx, exc))
 
     logger.info(
         "FHIR-inspired validation completed: %d patients, %d observations",
