@@ -3,12 +3,11 @@ from pathlib import Path
 from typing import Dict, Iterator, Optional, Tuple
 
 import pandas as pd
-from pydantic import ValidationError
 
 from healthcli.clinical_rules_extended import run_clinical_rules
 from healthcli.config_loader import load_config
 from healthcli.data_loader import load_csv_data
-from healthcli.fhir_validator import CodeableConcept, Coding, Observation, Patient, Quantity, Reference
+from healthcli.fhir_validator import validate_dataframe
 from healthcli.idempotency import (
     PIPELINE_VERSION,
     IdempotencyChecker,
@@ -58,41 +57,19 @@ def iter_csv_chunks(data_path: str, chunk_size: int) -> Iterator[pd.DataFrame]:
 
 
 def validate_fhir_chunk(frame: pd.DataFrame) -> Dict[str, int]:
-    """Validate FHIR resources mapped from common tabular fields."""
-    result = {"patients_validated": 0, "patient_errors": 0, "observations_validated": 0, "observation_errors": 0}
-    if "patient_nbr" in frame.columns:
-        for row in frame.itertuples(index=True):
-            try:
-                Patient(id=str(row.patient_nbr), gender="unknown")
-                result["patients_validated"] += 1
-            except ValidationError:
-                result["patient_errors"] += 1
+    """Validate FHIR resources mapped from common tabular fields.
 
-    loinc_columns = {"max_glu_serum": "2345-7", "A1Cresult": "4548-4"}
-    if "patient_nbr" in frame.columns:
-        for column, loinc in loinc_columns.items():
-            if column not in frame.columns:
-                continue
-            for row in frame.itertuples(index=True):
-                value = getattr(row, column)
-                if pd.isna(value):
-                    continue
-                try:
-                    Observation(
-                        id=f"obs-{row.Index}-{column}",
-                        status="final",
-                        code=CodeableConcept(
-                            coding=[Coding(system="http://loinc.org", code=loinc)]
-                        ),
-                        subject=Reference(
-                            reference=f"Patient/{row.patient_nbr}"
-                        ),
-                        valueQuantity=Quantity(value=float(value), unit="mg/dL"),
-                    )
-                    result["observations_validated"] += 1
-                except (TypeError, ValueError, ValidationError):
-                    result["observation_errors"] += 1
-    return result
+    Delegates to `fhir_validator.validate_dataframe`, the same row-to-resource
+    mapping the materialized (non-streaming) path uses via `quality.fhir_validation_summary`,
+    so streaming and materialized runs apply identical validation rules.
+    """
+    summary = validate_dataframe(frame)
+    return {
+        "patients_validated": summary["patients_validated"],
+        "patient_errors": summary["patient_errors"],
+        "observations_validated": summary["observations_validated"],
+        "observation_errors": summary["observation_errors"],
+    }
 
 
 def process_chunks_streaming(
@@ -247,6 +224,7 @@ def run_pipeline_streaming(data_path: str, config_path: str, output_dir: str) ->
     before_bytes = after_bytes = numeric_columns = categorical_columns = 0
     schema_missing_columns_seen: set = set()
     schema_field_error_totals: Dict[str, int] = {}
+    fhir_totals = {"patients_validated": 0, "patient_errors": 0, "observations_validated": 0, "observation_errors": 0}
     total_rows = 0
     chunk_count = 0
 
@@ -263,6 +241,12 @@ def run_pipeline_streaming(data_path: str, config_path: str, output_dir: str) ->
             key = f"{error.column}:{error.error_type}"
             schema_field_error_totals[key] = schema_field_error_totals.get(key, 0) + error.row_count
 
+        fhir_summary = validate_dataframe(optimized)
+        for key in fhir_totals:
+            fhir_totals[key] += fhir_summary[key]
+        for row_index, reason in fhir_summary["error_details"]:
+            rejected_sink.write_rejection(chunk_number, row_index, reason)
+
         if idempotency_checker is not None:
             optimized = idempotency_checker.process_chunk(optimized)
 
@@ -274,6 +258,11 @@ def run_pipeline_streaming(data_path: str, config_path: str, output_dir: str) ->
 
     parquet_sink.finalize()
     rejected_sink.finalize()
+    logger.info(
+        "FHIR-inspired validation completed: %d patients, %d observations",
+        fhir_totals["patients_validated"],
+        fhir_totals["observations_validated"],
+    )
     if idempotency_checker is not None:
         idempotency_checker.commit()
         logger.info(

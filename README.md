@@ -26,7 +26,7 @@ flowchart LR
 ## Key engineering accomplishments
 
 - **Measured memory optimization:** numeric downcasting and safe category conversion are measured per pass. Running the pipeline against `data/diabetic_data.csv` (101,766 rows, mostly low-cardinality categorical columns) achieved a 96.3% reduction; results are schema- and data-dependent -- a mostly-numeric or high-cardinality dataset will see far less -- and emitted as `before_bytes`, `after_bytes`, and `reduction_ratio` so any claim can be re-measured against the target schema.
-- **FHIR R4-inspired validation boundary:** strict `Patient`, `Observation`, `Quantity`, `Reference`, and `CodeableConcept` models reject unknown fields, invalid identifiers, future birth dates, and malformed LOINC/SNOMED CT code shapes. This is not a complete FHIR conformance validator.
+- **FHIR R4-inspired validation boundary:** strict `Patient`, `Observation`, `VitalSigns`, `Quantity`, `Reference`, and `CodeableConcept` models reject unknown fields, invalid identifiers, future birth dates, malformed LOINC/SNOMED CT code shapes, and physiologically implausible vital-sign values. `fhir_validator.validate_dataframe()` is the single row-to-resource mapping used by both the materialized and `--streaming` pipeline paths, so results do not depend on which mode produced them. This is not a complete FHIR conformance validator.
 - **Dataset-level schema validation:** a versioned schema contract (`config/schema.yaml`) checks required columns, declared types, and controlled-vocabulary membership before clinical rules run. Errors are structured counts (`missing_columns`, per-column `field_errors`) -- rejected cell values are never included, so results are safe to log directly.
 - **Streaming ingestion:** `healthcli pipeline --streaming` writes each optimized chunk straight to a Parquet sink and accumulates missingness metrics incrementally, with no `pd.concat` and no full in-memory DataFrame at any point. The original materialized path (needed for the row-level HTML/PDF report) remains available as the default.
 - **Deterministic idempotency:** a SHA-256 dataset content hash, combined with the schema version and pipeline version, identifies a processing run; a canonical per-row hash detects duplicate records within it. A JSON processing manifest persists which row hashes have already been processed, so re-running an unchanged dataset reports rows as already-processed instead of duplicating output. No raw identifier is ever used as a manifest or log key.
@@ -125,10 +125,12 @@ The next engineering steps would be adopting the `ProcessingRequest`/`Processing
 src/healthcli/
 	data_loader.py             # Input checks and simple ingestion
 	memory_optimizer.py        # Downcasting, categories, and memory metrics
-	fhir_validator.py          # Strict FHIR R4 resource boundary
+	fhir_validator.py          # Strict FHIR R4 resource boundary; validate_dataframe() is the
+	                           # single row-to-resource mapping shared by both pipeline modes
 	schema_validator.py        # Dataset-level schema/type/vocabulary validation
 	clinical_rules_extended.py # Domain-specific data quality rules
-	quality.py                 # Aggregation and reporting inputs
+	quality.py                 # Aggregation, missingness, and FHIR validation reporting
+	                           # (delegates to fhir_validator.validate_dataframe)
 	sinks.py                   # RecordSink Protocol, DataFrameSink, ParquetSink
 	streaming_metrics.py       # Incremental missingness aggregation across chunks
 	idempotency.py             # Dataset/row hashing and the processing manifest
