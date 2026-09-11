@@ -5,12 +5,11 @@ production deployment should replace the terminology stubs with an approved
 FHIR terminology server or versioned local ValueSet.
 """
 
-from datetime import date, datetime
 import re
+from datetime import date, datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 
 FHIR_ID = r"^[A-Za-z0-9\-\.]{1,64}$"
 LOINC_PATTERN = re.compile(r"^\d{1,5}-\d$")

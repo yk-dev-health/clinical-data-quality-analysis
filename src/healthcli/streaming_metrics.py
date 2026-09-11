@@ -10,7 +10,7 @@ between chunks.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, cast
 
 import pandas as pd
 
@@ -39,7 +39,10 @@ class StreamingMetricAggregator:
 
         counts = [self._missing_counts[c] for c in self._column_order]
         ratios = [c / self.total_rows if self.total_rows else 0.0 for c in counts]
-        return pd.DataFrame(
-            {"missing_count": counts, "missing_ratio": ratios},
-            index=pd.Index(self._column_order, name=None),
-        ).sort_values("missing_ratio", ascending=False)
+        return cast(
+            pd.DataFrame,
+            pd.DataFrame(
+                {"missing_count": counts, "missing_ratio": ratios},
+                index=pd.Index(self._column_order, name=None),
+            ).sort_values("missing_ratio", ascending=False),
+        )

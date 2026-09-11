@@ -1,6 +1,6 @@
-from pathlib import Path
 import logging
-from typing import Dict, Iterator, List, Optional, Tuple
+from pathlib import Path
+from typing import Dict, Iterator, Optional, Tuple
 
 import pandas as pd
 from pydantic import ValidationError
@@ -9,6 +9,13 @@ from healthcli.clinical_rules_extended import run_clinical_rules
 from healthcli.config_loader import load_config
 from healthcli.data_loader import load_csv_data
 from healthcli.fhir_validator import CodeableConcept, Coding, Observation, Patient, Quantity, Reference
+from healthcli.idempotency import (
+    PIPELINE_VERSION,
+    IdempotencyChecker,
+    ProcessingManifest,
+    RunIdentity,
+    compute_dataset_hash,
+)
 from healthcli.logging_utils import setup_logger
 from healthcli.memory_optimizer import MemoryOptimizationMetrics, PandasMemoryOptimizer
 from healthcli.quality import fhir_validation_summary, missing_summary
@@ -22,13 +29,6 @@ from healthcli.schema_validator import (
 )
 from healthcli.sinks import DataFrameSink, ParquetSink, RecordSink, RejectedRecordSink
 from healthcli.streaming_metrics import StreamingMetricAggregator
-from healthcli.idempotency import (
-    PIPELINE_VERSION,
-    IdempotencyChecker,
-    ProcessingManifest,
-    RunIdentity,
-    compute_dataset_hash,
-)
 
 
 class SchemaValidationFailed(ValueError):
@@ -63,7 +63,7 @@ def validate_fhir_chunk(frame: pd.DataFrame) -> Dict[str, int]:
     if "patient_nbr" in frame.columns:
         for row in frame.itertuples(index=True):
             try:
-                Patient(id=str(getattr(row, "patient_nbr")), gender="unknown")
+                Patient(id=str(row.patient_nbr), gender="unknown")
                 result["patients_validated"] += 1
             except ValidationError:
                 result["patient_errors"] += 1
@@ -85,7 +85,7 @@ def validate_fhir_chunk(frame: pd.DataFrame) -> Dict[str, int]:
                             coding=[Coding(system="http://loinc.org", code=loinc)]
                         ),
                         subject=Reference(
-                            reference=f"Patient/{getattr(row, 'patient_nbr')}"
+                            reference=f"Patient/{row.patient_nbr}"
                         ),
                         valueQuantity=Quantity(value=float(value), unit="mg/dL"),
                     )

@@ -8,7 +8,8 @@ structured RuleResult objects for analysis and reporting.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
 
 
@@ -19,16 +20,16 @@ class RuleResult:
     
     Attributes:
         rule_name: Name of the rule (e.g., 'ClinicalCoherenceRule')
-        violations: List of row indices that violate the rule
+        violations: List of row indices, or column names, that violate the rule
         count: Number of violations
         severity: 'ERROR' or 'WARNING'
         details: Dict with additional context (e.g., age threshold, value range)
     """
     rule_name: str
-    violations: List[int] = field(default_factory=list)
+    violations: List[Any] = field(default_factory=list)
     count: int = 0
     severity: str = "WARNING"
-    details: Dict = field(default_factory=dict)
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 class ClinicalCoherenceRule:
@@ -42,7 +43,7 @@ class ClinicalCoherenceRule:
     is expected but still flagged if combined with other risk factors.
     """
     
-    def apply(self, df: pd.DataFrame, logger: logging.Logger = None) -> RuleResult:
+    def apply(self, df: pd.DataFrame, logger: Optional[logging.Logger] = None) -> RuleResult:
         """
         Check age/lab value coherence.
         
@@ -102,14 +103,14 @@ class VitalSignAnomalyRule:
         """
         if vital_column not in df.columns:
             return []
-        
-        anomalies = []
+
+        anomalies: List[int] = []
         
         # Group by patient_id, sort by timestamp
         if "patient_id" not in df.columns:
             return anomalies
         
-        for patient_id, group in df.groupby("patient_id", sort=False):
+        for _patient_id, group in df.groupby("patient_id", sort=False):
             if "timestamp" in group.columns:
                 group = group.sort_values("timestamp")
             
@@ -133,7 +134,7 @@ class VitalSignAnomalyRule:
         
         return anomalies
     
-    def apply(self, df: pd.DataFrame, logger: logging.Logger = None) -> RuleResult:
+    def apply(self, df: pd.DataFrame, logger: Optional[logging.Logger] = None) -> RuleResult:
         """
         Check for vital sign anomalies (spikes > 50%) in systolic BP, heart rate, etc.
         """
@@ -159,7 +160,7 @@ class PatientSexConsistencyRule:
     indicate data entry or linkage errors.
     """
 
-    def apply(self, df: pd.DataFrame, logger: logging.Logger = None) -> RuleResult:
+    def apply(self, df: pd.DataFrame, logger: Optional[logging.Logger] = None) -> RuleResult:
         result = RuleResult(rule_name="PatientSexConsistencyRule", severity="ERROR")
 
         if "patient_id" not in df.columns or "sex" not in df.columns:
@@ -192,7 +193,7 @@ class AgePlausibilityRule:
     MIN_AGE = 0
     MAX_AGE = 120
 
-    def apply(self, df: pd.DataFrame, logger: logging.Logger = None) -> RuleResult:
+    def apply(self, df: pd.DataFrame, logger: Optional[logging.Logger] = None) -> RuleResult:
         result = RuleResult(rule_name="AgePlausibilityRule", severity="WARNING")
 
         if "age" not in df.columns:
@@ -240,7 +241,7 @@ class MissingDataThresholdRule:
         self,
         df: pd.DataFrame,
         thresholds: Optional[Dict[str, float]] = None,
-        logger: logging.Logger = None,
+        logger: Optional[logging.Logger] = None,
     ) -> RuleResult:
         """
         Check missing data rates against context-aware thresholds.
@@ -286,7 +287,7 @@ class MissingDataThresholdRule:
 
 
 def run_clinical_rules(
-    df: pd.DataFrame, logger: logging.Logger = None
+    df: pd.DataFrame, logger: Optional[logging.Logger] = None
 ) -> Dict[str, RuleResult]:
     """
     Execute all clinical validation rules on the DataFrame.

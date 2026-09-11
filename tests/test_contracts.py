@@ -8,7 +8,6 @@ from healthcli.contracts import (
     process_request,
 )
 
-
 SCHEMA_YAML = """
 schema_version: "1.0"
 columns:

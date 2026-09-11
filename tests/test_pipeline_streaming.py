@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -5,9 +6,7 @@ import pytest
 import yaml
 
 from healthcli.pipeline import process_chunks, process_chunks_streaming, run_pipeline_streaming
-from healthcli.sinks import DataFrameSink, ParquetSink
-import logging
-
+from healthcli.sinks import ParquetSink
 
 REQUIRED_COLUMNS = ["patient_nbr", "gender", "age"]
 

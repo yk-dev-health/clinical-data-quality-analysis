@@ -55,6 +55,7 @@ python -m pip install -e ".[dev]"
 healthcli quality --data data/diabetic_data.csv --config config/config.yaml
 healthcli pipeline --data data/diabetic_data.csv --config config/config.yaml --output output
 healthcli pipeline --data data/diabetic_data.csv --config config/config.yaml --output output --streaming
+ruff check src tests examples scripts
 pytest -q
 mypy src/healthcli
 python scripts/benchmark_streaming.py --rows 1000000
@@ -143,7 +144,7 @@ tests/                       # Unit and integration tests
 
 ## Technology and engineering practice
 
-Python 3.9+, Pandas, NumPy, Pydantic v2, Jinja2, WeasyPrint, PyYAML, and `structlog` are used with a typed, testable module boundary. Development dependencies include pytest, coverage tooling, pandas stubs, and mypy. CI runs tests with coverage and mypy; formatting, security scanning, and cloud emulator integration tests remain recommended additions.
+Python 3.9+, Pandas, NumPy, Pydantic v2, Jinja2, WeasyPrint, PyYAML, and `structlog` are used with a typed, testable module boundary. Development dependencies include pytest, coverage tooling, pandas stubs, mypy, and ruff. CI runs `ruff check`, tests with coverage, and mypy; formatting enforcement, security scanning, and cloud emulator integration tests remain recommended additions.
 
 ## Interview defense guide
 

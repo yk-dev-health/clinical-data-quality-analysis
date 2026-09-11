@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, cast
 
 import pandas as pd
 
@@ -145,11 +145,12 @@ class IdempotencyChecker:
         self.metrics.duplicate_rows += int(is_duplicate.sum())
         self.metrics.new_rows += int((~is_duplicate).sum())
 
-        new_hashes = row_hashes[~is_duplicate]
+        keep_mask = ~is_duplicate
+        new_hashes = row_hashes[keep_mask]
         self._seen_this_run.update(new_hashes)
         self._new_this_run.extend(new_hashes)
 
-        return chunk.loc[~is_duplicate.values]
+        return cast(pd.DataFrame, chunk.loc[keep_mask])
 
     def commit(self) -> None:
         """Persist newly processed row hashes to the manifest."""

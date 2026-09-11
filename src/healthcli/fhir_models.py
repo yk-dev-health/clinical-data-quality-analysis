@@ -6,8 +6,9 @@ without requiring full FHIR compliance. They capture core clinical fields
 and enforce basic medical plausibility constraints.
 """
 
-from datetime import datetime, date
-from typing import Optional, List, Literal
+from datetime import date, datetime
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 

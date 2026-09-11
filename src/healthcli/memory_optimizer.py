@@ -1,7 +1,7 @@
 """Memory-efficient pandas transformations for clinical data pipelines."""
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import pandas as pd

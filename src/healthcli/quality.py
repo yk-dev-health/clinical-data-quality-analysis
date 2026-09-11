@@ -1,25 +1,28 @@
-import pandas as pd
 import logging
-from typing import Dict, Any
+from datetime import date
+from typing import Any, Dict, Literal, Optional, cast
+
+import pandas as pd
 from pydantic import ValidationError
 
-from healthcli.fhir_models import Observation, Patient, VitalSigns
+from healthcli.fhir_models import Observation, Patient, Quantity, VitalSigns
 
 
 def dataset_overview(df: pd.DataFrame, logger: logging.Logger) -> Dict[str, Any]:
     """
     Logs basic dataset dimensions and returns structural metadata.
     """
-    overview = {
+    columns = df.columns.tolist()
+    overview: Dict[str, Any] = {
         "rows": len(df),
-        "columns": df.columns.tolist(),
+        "columns": columns,
         "dtypes": df.dtypes.astype(str).to_dict(),
     }
 
     logger.info(
         "Dataset overview: rows=%d, columns=%d",
         overview["rows"],
-        len(overview["columns"]),
+        len(columns),
     )
 
     return overview
@@ -62,16 +65,20 @@ def missing_summary(df: pd.DataFrame, logger: logging.Logger, config: Dict[str, 
             worst_column,
         )
 
-    return summary
+    return cast(pd.DataFrame, summary)
 
 
-def _normalize_gender(value: Any) -> str:
+def _normalize_gender(value: Any) -> Literal["male", "female", "other", "unknown"]:
     if pd.isna(value):
         return "unknown"
 
     gender = str(value).strip().lower()
-    if gender in {"male", "female", "other", "unknown"}:
-        return gender
+    if gender == "male":
+        return "male"
+    if gender == "female":
+        return "female"
+    if gender == "other":
+        return "other"
 
     return "unknown"
 
@@ -96,7 +103,7 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
     This step is designed to demonstrate how clinical tabular data can be
     mapped to patient and observation resources and validated deterministically.
     """
-    summary = {
+    summary: Dict[str, Any] = {
         "patients_validated": 0,
         "patient_errors": 0,
         "observations_validated": 0,
@@ -107,15 +114,16 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
     # Patient-style validation
     if {"patient_nbr", "gender"}.issubset(df.columns):
         for idx, row in df.iterrows():
-            payload = {
-                "id": str(row["patient_nbr"]),
-                "gender": _normalize_gender(row.get("gender", "unknown")),
-            }
-            if "birthDate" in df.columns and pd.notna(row.get("birthDate")):
-                payload["birthDate"] = row["birthDate"]
+            birth_date: Optional[date] = (
+                row["birthDate"] if "birthDate" in df.columns and pd.notna(row.get("birthDate")) else None
+            )
 
             try:
-                Patient(**payload)
+                Patient(
+                    id=str(row["patient_nbr"]),
+                    gender=_normalize_gender(row.get("gender", "unknown")),
+                    birthDate=birth_date,
+                )
                 summary["patients_validated"] += 1
             except ValidationError as exc:
                 summary["patient_errors"] += 1
@@ -141,15 +149,13 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
                     summary["errors"].append(f"Observation row {idx} column {col}: non-numeric value")
                     continue
 
-                payload = {
-                    "id": f"obs-{idx}-{col}",
-                    "code": col,
-                    "subject": str(row["patient_nbr"]),
-                    "value": {"value": value, "unit": "mg/dL", "code": col},
-                }
-
                 try:
-                    Observation(**payload)
+                    Observation(
+                        id=f"obs-{idx}-{col}",
+                        code=col,
+                        subject=str(row["patient_nbr"]),
+                        value=Quantity(value=value, unit="mg/dL", code=col),
+                    )
                     summary["observations_validated"] += 1
                 except ValidationError as exc:
                     summary["observation_errors"] += 1
@@ -180,15 +186,13 @@ def fhir_validation_summary(df: pd.DataFrame, logger: logging.Logger) -> Dict[st
                     summary["errors"].append(f"Vital sign row {idx} column {col}: non-numeric value")
                     continue
 
-                payload = {
-                    "id": f"vital-{idx}-{col}",
-                    "code": col,
-                    "subject": str(row["patient_nbr"]),
-                    "value": {"value": value, "unit": unit, "code": col},
-                }
-
                 try:
-                    VitalSigns(**payload)
+                    VitalSigns(
+                        id=f"vital-{idx}-{col}",
+                        code=col,
+                        subject=str(row["patient_nbr"]),
+                        value=Quantity(value=value, unit=unit, code=col),
+                    )
                     summary["observations_validated"] += 1
                 except ValidationError as exc:
                     summary["observation_errors"] += 1
@@ -219,7 +223,7 @@ def numeric_summary(df: pd.DataFrame, logger: logging.Logger,) -> pd.DataFrame:
         summary.shape[0],
     )
 
-    return summary
+    return cast(pd.DataFrame, summary)
 
 
 def exclusion_candidates(missing_summary: pd.DataFrame, logger: logging.Logger, config: Dict[str, Any],
@@ -250,7 +254,7 @@ def exclusion_candidates(missing_summary: pd.DataFrame, logger: logging.Logger, 
                 row["missing_ratio"],
             )
 
-    return candidates
+    return cast(pd.DataFrame, candidates)
 
 def categorical_summary(df: pd.DataFrame, logger: logging.Logger, config: Dict[str, Any],) -> Dict[str, pd.Series]:
     """
