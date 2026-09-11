@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Dict, Iterator, Optional, Tuple
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 import pandas as pd
 
@@ -17,7 +17,7 @@ from healthcli.idempotency import (
 )
 from healthcli.logging_utils import setup_logger
 from healthcli.memory_optimizer import MemoryOptimizationMetrics, PandasMemoryOptimizer
-from healthcli.quality import fhir_validation_summary, missing_summary
+from healthcli.quality import missing_summary
 from healthcli.quality_report import QualityReportGenerator
 from healthcli.schema_validator import (
     DatasetSchema,
@@ -56,40 +56,32 @@ def iter_csv_chunks(data_path: str, chunk_size: int) -> Iterator[pd.DataFrame]:
     yield from pd.read_csv(path, chunksize=chunk_size)
 
 
-def validate_fhir_chunk(frame: pd.DataFrame) -> Dict[str, int]:
-    """Validate FHIR resources mapped from common tabular fields.
-
-    Delegates to `fhir_validator.validate_dataframe`, the same row-to-resource
-    mapping the materialized (non-streaming) path uses via `quality.fhir_validation_summary`,
-    so streaming and materialized runs apply identical validation rules.
-    """
-    summary = validate_dataframe(frame)
-    return {
-        "patients_validated": summary["patients_validated"],
-        "patient_errors": summary["patient_errors"],
-        "observations_validated": summary["observations_validated"],
-        "observation_errors": summary["observation_errors"],
-    }
-
-
 def process_chunks_streaming(
     data_path: str,
     chunk_size: int,
     logger: logging.Logger,
     sink: RecordSink,
-) -> Tuple[MemoryOptimizationMetrics, Dict[str, int], StreamingMetricAggregator, int]:
+) -> Tuple[MemoryOptimizationMetrics, Dict[str, Any], StreamingMetricAggregator, int]:
     """Optimize and validate each chunk, writing it to `sink` without concatenation.
 
     Unlike `process_chunks`, this never holds more than one chunk in memory
     at a time (beyond whatever the sink itself buffers): every optimized
     chunk is written to `sink` immediately and dropped. Missingness metrics
     are accumulated incrementally via `StreamingMetricAggregator`, so a full
-    materialized DataFrame is never required for reporting.
+    materialized DataFrame is never required for reporting. FHIR validation
+    is also computed once here, per chunk, rather than a second time against
+    a materialized frame.
     """
     optimizer = PandasMemoryOptimizer(logger=logger)
     aggregator = StreamingMetricAggregator()
     before_bytes = after_bytes = numeric_columns = categorical_columns = 0
-    fhir_totals = {"patients_validated": 0, "patient_errors": 0, "observations_validated": 0, "observation_errors": 0}
+    fhir_totals: Dict[str, Any] = {
+        "patients_validated": 0,
+        "patient_errors": 0,
+        "observations_validated": 0,
+        "observation_errors": 0,
+        "errors": [],
+    }
     chunk_count = 0
 
     for chunk_number, chunk in enumerate(iter_csv_chunks(data_path, chunk_size), start=1):
@@ -100,8 +92,10 @@ def process_chunks_streaming(
         after_bytes += metrics.after_bytes
         numeric_columns += metrics.numeric_columns
         categorical_columns += metrics.categorical_columns
-        for key, value in validate_fhir_chunk(optimized).items():
-            fhir_totals[key] += value
+        chunk_fhir_summary = validate_dataframe(optimized)
+        for key in ("patients_validated", "patient_errors", "observations_validated", "observation_errors"):
+            fhir_totals[key] += chunk_fhir_summary[key]
+        fhir_totals["errors"].extend(chunk_fhir_summary["errors"])
         logger.info("processed chunk=%d rows=%d", chunk_number, len(chunk))
         chunk_count = chunk_number
 
@@ -109,6 +103,11 @@ def process_chunks_streaming(
     if chunk_count == 0:
         raise ValueError(f"Dataset is empty: {data_path}")
     metrics = MemoryOptimizationMetrics(before_bytes, after_bytes, numeric_columns, categorical_columns)
+    logger.info(
+        "FHIR-inspired validation completed: %d patients, %d observations",
+        fhir_totals["patients_validated"],
+        fhir_totals["observations_validated"],
+    )
     return metrics, fhir_totals, aggregator, aggregator.total_rows
 
 
@@ -116,13 +115,14 @@ def process_chunks(
     data_path: str,
     chunk_size: int,
     logger: logging.Logger,
-) -> Tuple[pd.DataFrame, MemoryOptimizationMetrics, Dict[str, int]]:
+) -> Tuple[pd.DataFrame, MemoryOptimizationMetrics, Dict[str, Any]]:
     """Optimize and validate each chunk, materializing a single report DataFrame.
 
     Kept for callers (and the HTML/PDF report) that need row-level access to
     the full dataset. Internally this is now just `process_chunks_streaming`
     with a `DataFrameSink` -- the materialized path is one sink choice among
-    several, not a separate code path.
+    several, not a separate code path. FHIR validation runs once per chunk
+    here; callers must not re-validate the materialized result.
     """
     sink = DataFrameSink()
     metrics, fhir_totals, _aggregator, _rows = process_chunks_streaming(data_path, chunk_size, logger, sink)
@@ -158,11 +158,16 @@ def run_schema_validation(df: pd.DataFrame, config: dict, logger: logging.Logger
     return result
 
 
-def validate(df, config: dict) -> dict:
+def validate(df, config: dict, fhir_summary: Dict[str, Any]) -> dict:
+    """Run missingness and clinical-rule checks; FHIR validation is passed in.
+
+    FHIR validation already ran once per chunk in `process_chunks` -- it is
+    not re-run here against the materialized frame, to avoid validating the
+    same rows twice.
+    """
     logger = logging.getLogger("healthcli.pipeline")
     summary = missing_summary(df, logger, config)
     clinical_violations = run_clinical_rules(df, logger)
-    fhir_summary = fhir_validation_summary(df, logger)
     return {
         "missing_summary": summary,
         "clinical_violations": clinical_violations,
@@ -376,9 +381,8 @@ def run_pipeline(data_path: str, config_path: str, output_dir: str) -> int:
     else:
         idempotency_metrics = None
 
-    results = validate(df, config)
+    results = validate(df, config, fhir_r4_summary)
     results["schema_validation"] = schema_result
-    results["fhir_r4_summary"] = fhir_r4_summary
     results["memory_metrics"] = memory_metrics
     if idempotency_metrics is not None:
         results["idempotency"] = idempotency_metrics
