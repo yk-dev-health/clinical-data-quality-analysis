@@ -25,7 +25,7 @@ flowchart LR
 
 ## Key engineering accomplishments
 
-- **Measured memory optimization:** numeric downcasting and safe category conversion are measured per pass. The sample dataset achieved a 14.1% reduction; results are schema- and data-dependent and emitted as `before_bytes`, `after_bytes`, and `reduction_ratio`.
+- **Measured memory optimization:** numeric downcasting and safe category conversion are measured per pass. Running the pipeline against `data/diabetic_data.csv` (101,766 rows, mostly low-cardinality categorical columns) achieved a 96.3% reduction; results are schema- and data-dependent -- a mostly-numeric or high-cardinality dataset will see far less -- and emitted as `before_bytes`, `after_bytes`, and `reduction_ratio` so any claim can be re-measured against the target schema.
 - **FHIR R4-inspired validation boundary:** strict `Patient`, `Observation`, `Quantity`, `Reference`, and `CodeableConcept` models reject unknown fields, invalid identifiers, future birth dates, and malformed LOINC/SNOMED CT code shapes. This is not a complete FHIR conformance validator.
 - **Dataset-level schema validation:** a versioned schema contract (`config/schema.yaml`) checks required columns, declared types, and controlled-vocabulary membership before clinical rules run. Errors are structured counts (`missing_columns`, per-column `field_errors`) -- rejected cell values are never included, so results are safe to log directly.
 - **Streaming ingestion:** `healthcli pipeline --streaming` writes each optimized chunk straight to a Parquet sink and accumulates missingness metrics incrementally, with no `pd.concat` and no full in-memory DataFrame at any point. The original materialized path (needed for the row-level HTML/PDF report) remains available as the default.
@@ -40,13 +40,13 @@ These are representative engineering targets, not universal guarantees. Run the 
 
 | Workload | Execution mode | Expected engineering outcome |
 | --- | --- | --- |
-| Sample mixed CSV | One optimized pass | 14.1% measured memory reduction |
-| 100k-row mixed CSV | One optimized pass | Dataset-specific reduction metrics |
+| `data/diabetic_data.csv` (101,766 rows, mostly categorical) | One optimized pass | 96.3% measured memory reduction |
+| Mostly-numeric or high-cardinality CSV | One optimized pass | Little to no reduction -- category conversion only helps low-cardinality strings |
 | Multi-GB CSV | `chunksize` configured in pipeline, `--streaming` for Parquet output | Incremental reads; `--streaming` avoids the final `pd.concat` |
 | Low-cardinality strings | Pandas `category` | Dictionary encoding where it reduces deep memory |
 | FHIR resource mapping | Pydantic v2 | Deterministic accepted/rejected resource counts |
 
-`scripts/benchmark_streaming.py` measures materialized vs. `--streaming` mode on a synthetic 1,000,000-row dataset (7 columns, no real patient data). One representative run on this machine: both modes processed ~15,000 rows/sec (~67s total), with peak RSS in the 190-210MB range for either mode -- at this row count and column width, the per-process pandas/pyarrow baseline dominates over the size of the materialized DataFrame itself, so the two modes are close on memory. Streaming mode's actual benefit is architectural, not a memory win at this scale: it removes the single-DataFrame ceiling entirely, so a dataset larger than available RAM (multi-GB, tens of millions of rows) can still be processed, which the materialized path cannot do regardless of chunk size. Re-run the script against your own target schema and row count before making a capacity claim; `--rows` and `--chunk-size` are configurable.
+`scripts/benchmark_streaming.py` measures materialized vs. `--streaming` mode on a synthetic 1,000,000-row dataset (7 columns, no real patient data). One representative run on this machine: both modes processed ~18,000-20,000 rows/sec (~50-55s total), with peak RSS in the 195-210MB range for either mode -- at this row count and column width, the per-process pandas/pyarrow baseline dominates over the size of the materialized DataFrame itself, so the two modes are close on memory. Streaming mode's actual benefit is architectural, not a memory win at this scale: it removes the single-DataFrame ceiling entirely, so a dataset larger than available RAM (multi-GB, tens of millions of rows) can still be processed, which the materialized path cannot do regardless of chunk size. Re-run the script against your own target schema and row count before making a capacity claim; `--rows` and `--chunk-size` are configurable.
 
 ## Quickstart
 
