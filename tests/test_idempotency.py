@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from healthcli.idempotency import (
@@ -6,6 +7,7 @@ from healthcli.idempotency import (
     RunIdentity,
     compute_dataset_hash,
     compute_row_hash,
+    compute_row_hashes,
 )
 
 
@@ -59,6 +61,38 @@ def test_row_hash_is_not_reversible_to_raw_value():
     row = pd.Series({"patient_nbr": "12345678"})
     digest = compute_row_hash(row, ["patient_nbr"])
     assert "12345678" not in digest
+
+
+def test_vectorized_row_hashes_match_per_row_hash():
+    """`compute_row_hashes` (used on whole chunks) must agree with the
+    per-row `compute_row_hash` it replaced -- otherwise a manifest built
+    under the old code would stop recognising rows as duplicates."""
+    df = pd.DataFrame(
+        {
+            "patient_nbr": ["1", "2", "3"],
+            "gender": [" Male", "female ", None],
+            "age": [45.0, np.nan, 60.0],
+        }
+    )
+    columns = ["patient_nbr", "gender", "age"]
+
+    expected = df.apply(lambda row: compute_row_hash(row, columns), axis=1).reset_index(drop=True)
+    actual = compute_row_hashes(df, columns).reset_index(drop=True)
+
+    assert (expected == actual).all()
+
+
+def test_vectorized_row_hashes_match_per_row_hash_for_categorical_columns():
+    """Memory-optimized DataFrames store low-cardinality text columns as
+    `category` dtype; the vectorized hashing must not confuse a category's
+    label set with the actual per-row values (see fhir/idempotency fix)."""
+    df = pd.DataFrame({"gender": pd.Categorical(["Male", "Female", "Male"]), "age": [10, 20, 30]})
+    columns = ["gender", "age"]
+
+    expected = df.apply(lambda row: compute_row_hash(row, columns), axis=1).reset_index(drop=True)
+    actual = compute_row_hashes(df, columns).reset_index(drop=True)
+
+    assert (expected == actual).all()
 
 
 def test_manifest_persists_and_reloads(tmp_path):

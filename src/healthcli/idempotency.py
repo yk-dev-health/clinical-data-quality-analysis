@@ -76,6 +76,9 @@ def compute_row_hash(row: pd.Series, columns: Iterable[str]) -> str:
     do not change the row's identity for duplicate-detection purposes. The
     hash is one-way: it cannot be used to recover the original field values,
     so it is safe to persist and log directly.
+
+    Kept for callers that need a single row's hash; `compute_row_hashes`
+    below is the vectorized equivalent used for whole-chunk hashing.
     """
     parts: List[str] = []
     for column in sorted(columns):
@@ -88,6 +91,56 @@ def compute_row_hash(row: pd.Series, columns: Iterable[str]) -> str:
             parts.append(f"{column}={str(value).strip().lower()}")
     canonical = "|".join(parts)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _canonicalize_column(series: pd.Series, column: str) -> pd.Series:
+    """Vectorized per-column canonicalization matching `compute_row_hash`'s formatting.
+
+    Column dtype alone cannot decide the formatting rule: an `object`-dtype
+    column loaded from mixed sources may hold real Python floats alongside
+    strings, and `compute_row_hash` formats each *value* by its own type
+    (`.10g` for floats, stripped/lower-cased text otherwise). A plain
+    `is_float_dtype` check on the column would miss floats hiding in an
+    object column, so floats are masked out and formatted separately
+    regardless of the column's overall dtype.
+    """
+    # Categorical columns must be decategorized before per-value masking: a
+    # categorical `.map()` operates on the category labels, not the actual
+    # per-row values, so `.where(mask).map(...)` on one would run the
+    # formatter over every category label rather than the masked rows.
+    if isinstance(series.dtype, pd.CategoricalDtype):
+        series = series.astype("object")
+
+    is_null = series.isna()
+    is_float = series.map(lambda v: isinstance(v, float), na_action="ignore").astype("boolean").fillna(False)
+
+    text_formatted = series.astype("string").str.strip().str.lower()
+    float_formatted = series.where(is_float).map(lambda v: f"{v:.10g}", na_action="ignore")
+
+    formatted = text_formatted.where(~is_float, float_formatted)
+    return cast(pd.Series, f"{column}=" + formatted.where(~is_null, "<null>"))
+
+
+def compute_row_hashes(df: pd.DataFrame, columns: Iterable[str]) -> pd.Series:
+    """Vectorized form of `compute_row_hash` applied to every row of `df`.
+
+    Builds the same "|"-joined canonical string per row via column-wise
+    (not row-wise) pandas operations, then hashes each resulting string.
+    Hashing itself is inherently per-value (SHA-256 has no vectorized
+    form), but the expensive canonicalization work runs once per column
+    instead of once per row.
+    """
+    sorted_columns = sorted(columns)
+    canonical_parts = [_canonicalize_column(df[column], column) for column in sorted_columns]
+
+    if not canonical_parts:
+        return pd.Series("", index=df.index)
+
+    canonical = canonical_parts[0]
+    for part in canonical_parts[1:]:
+        canonical = canonical + "|" + part
+
+    return canonical.map(lambda s: hashlib.sha256(s.encode("utf-8")).hexdigest())
 
 
 class ProcessingManifest:
@@ -138,7 +191,7 @@ class IdempotencyChecker:
             self.metrics.new_rows += len(chunk)
             return chunk
 
-        row_hashes = chunk.apply(lambda row: compute_row_hash(row, columns), axis=1)
+        row_hashes = compute_row_hashes(chunk, columns)
         is_duplicate = row_hashes.isin(self._seen_this_run)
 
         self.metrics.total_rows += len(chunk)

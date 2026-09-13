@@ -86,6 +86,52 @@ def test_vital_sign_anomaly_detects_spike():
     assert result.count == 1
 
 
+def test_vital_sign_anomaly_ignores_cross_patient_jumps():
+    """A spike must only be compared against the same patient's previous
+    reading, never against a neighboring patient's row."""
+    df = pd.DataFrame(
+        {
+            "patient_id": [1, 2],
+            "timestamp": [1, 1],
+            "systolic_bp": [120, 400],
+        }
+    )
+
+    result = VitalSignAnomalyRule().apply(df)
+
+    assert result.count == 0
+
+
+def test_vital_sign_anomaly_orders_by_timestamp_even_when_rows_are_unsorted():
+    df = pd.DataFrame(
+        {
+            "patient_id": [1, 1, 1],
+            "timestamp": [3, 1, 2],
+            "systolic_bp": [200, 120, 122],
+        }
+    )
+
+    result = VitalSignAnomalyRule().detect_spike(df, "systolic_bp")
+
+    # Chronological order is 120 -> 122 -> 200; only the last jump spikes,
+    # and it must be reported against the row holding timestamp=3.
+    assert result == [0]
+
+
+def test_vital_sign_anomaly_skips_zero_previous_value():
+    df = pd.DataFrame(
+        {
+            "patient_id": [1, 1],
+            "timestamp": [1, 2],
+            "systolic_bp": [0, 120],
+        }
+    )
+
+    result = VitalSignAnomalyRule().detect_spike(df, "systolic_bp")
+
+    assert result == []
+
+
 def test_missing_data_threshold_flags_column_over_threshold():
     df = pd.DataFrame({"patient_id": [1, None, None]})
 

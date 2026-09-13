@@ -8,7 +8,7 @@ structured RuleResult objects for analysis and reporting.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -98,41 +98,31 @@ class VitalSignAnomalyRule:
     ) -> List[int]:
         """
         Detect > 50% change in a vital sign within same patient.
-        
+
         Returns list of row indices with anomalies.
         """
-        if vital_column not in df.columns:
+        if vital_column not in df.columns or "patient_id" not in df.columns:
             return []
 
-        anomalies: List[int] = []
-        
-        # Group by patient_id, sort by timestamp
-        if "patient_id" not in df.columns:
-            return anomalies
-        
-        for _patient_id, group in df.groupby("patient_id", sort=False):
-            if "timestamp" in group.columns:
-                group = group.sort_values("timestamp")
-            
-            values = pd.to_numeric(group[vital_column], errors="coerce").values
-            indices = group.index.tolist()
-            
-            # Compare consecutive measurements
-            for i in range(1, len(values)):
-                prev_val = values[i - 1]
-                curr_val = values[i]
-                
-                # Skip if either value is NaN or zero
-                if pd.isna(prev_val) or pd.isna(curr_val) or prev_val == 0:
-                    continue
-                
-                # Calculate percentage change
-                pct_change = abs((curr_val - prev_val) / prev_val) * 100
-                
-                if pct_change > threshold_pct:
-                    anomalies.append(indices[i])
-        
-        return anomalies
+        working = df[["patient_id", vital_column]].copy()
+        working["_value"] = pd.to_numeric(working[vital_column], errors="coerce")
+
+        if "timestamp" in df.columns:
+            working["_timestamp"] = df["timestamp"]
+            working = working.sort_values(["patient_id", "_timestamp"], kind="stable")
+
+        grouped = working.groupby("patient_id", sort=False)["_value"]
+        prev_val = grouped.shift(1)
+        curr_val = working["_value"]
+
+        # Skip if either value is NaN or the previous value is zero
+        # (would divide by zero / undefined percentage change).
+        comparable = prev_val.notna() & curr_val.notna() & (prev_val != 0)
+        pct_change = ((curr_val - prev_val) / prev_val).abs() * 100
+
+        is_spike = comparable & (pct_change > threshold_pct)
+
+        return cast(List[int], working.index[is_spike].tolist())
     
     def apply(self, df: pd.DataFrame, logger: Optional[logging.Logger] = None) -> RuleResult:
         """

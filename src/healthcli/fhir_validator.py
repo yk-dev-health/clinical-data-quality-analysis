@@ -7,7 +7,7 @@ FHIR terminology server or versioned local ValueSet.
 
 import re
 from datetime import date, datetime
-from typing import Any, ClassVar, Dict, Literal, Optional
+from typing import Any, ClassVar, Dict, Literal, Optional, cast
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -164,6 +164,160 @@ def _normalize_gender(value: Any) -> Literal["male", "female", "other", "unknown
     return "unknown"
 
 
+_GENDER_MAP = {"male": "male", "female": "female", "other": "other"}
+
+
+def _normalize_gender_series(series: pd.Series) -> pd.Series:
+    """Vectorized form of `_normalize_gender` for an entire column."""
+    normalized = series.astype("string").str.strip().str.lower()
+    return normalized.map(_GENDER_MAP).fillna("unknown")
+
+
+def _validate_patient_row(idx: Any, patient_nbr: Any, gender: str, birth_date: Any) -> Optional[str]:
+    """Run the strict Pydantic `Patient` model for one row and return an error message, if any."""
+    try:
+        Patient(id=str(patient_nbr), gender=gender, birthDate=birth_date if pd.notna(birth_date) else None)
+        return None
+    except ValidationError as exc:
+        return _describe_validation_error("Patient", idx, exc)
+
+
+def _validate_observation_row(
+    idx: Any, patient_nbr: Any, column: str, loinc: str, value: float, unit: str, resource_label: str
+) -> Optional[str]:
+    """Run the strict Pydantic `Observation` model for one row and return an error message, if any."""
+    try:
+        Observation(
+            id=f"obs-{idx}-{column}".replace("_", "-"),
+            status="final",
+            code=CodeableConcept(coding=[Coding(system="http://loinc.org", code=loinc)]),
+            subject=Reference(reference=f"Patient/{patient_nbr}"),
+            valueQuantity=Quantity(value=value, unit=unit),
+        )
+        return None
+    except ValidationError as exc:
+        return _describe_validation_error(resource_label, idx, exc)
+
+
+def _validate_vital_sign_row(
+    idx: Any, patient_nbr: Any, column: str, loinc: str, value: float, unit: str, resource_label: str
+) -> Optional[str]:
+    """Run the strict Pydantic `VitalSigns` model for one row and return an error message, if any."""
+    try:
+        VitalSigns(
+            id=f"vital-{idx}-{column}".replace("_", "-"),
+            status="final",
+            code=CodeableConcept(coding=[Coding(system="http://loinc.org", code=loinc)]),
+            subject=Reference(reference=f"Patient/{patient_nbr}"),
+            valueQuantity=Quantity(value=value, unit=unit),
+        )
+        return None
+    except ValidationError as exc:
+        return _describe_validation_error(resource_label, idx, exc)
+
+
+def _validate_patients(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
+    """Validate the patient-level columns.
+
+    A vectorized pre-pass (id shape, gender, birth date not in the future)
+    clears every row that is obviously fine so Pydantic never runs on them.
+    Only the rows that fail -- or are ambiguous (e.g. an unparsable date) --
+    pay the per-row Pydantic cost, which is also what produces the audit-safe
+    error message.
+    """
+    id_str = df["patient_nbr"].astype("string")
+    id_ok = id_str.notna() & id_str.str.match(FHIR_ID)
+
+    gender_series = _normalize_gender_series(df.get("gender", pd.Series("unknown", index=df.index)))
+
+    if "birthDate" in df.columns:
+        parsed_dates = pd.to_datetime(df["birthDate"], errors="coerce")
+        has_raw_date = df["birthDate"].notna()
+        date_unparsable = has_raw_date & parsed_dates.isna()
+        date_in_future = parsed_dates.notna() & (parsed_dates > pd.Timestamp.now())
+        date_ok = ~date_unparsable & ~date_in_future
+    else:
+        date_unparsable = pd.Series(False, index=df.index)
+        date_ok = pd.Series(True, index=df.index)
+
+    fast_path_ok = id_ok & date_ok
+    needs_pydantic = ~fast_path_ok
+
+    summary["patients_validated"] += int(fast_path_ok.sum())
+
+    if needs_pydantic.any():
+        birth_dates = df["birthDate"] if "birthDate" in df.columns else pd.Series(None, index=df.index)
+        for idx in df.index[needs_pydantic]:
+            message = _validate_patient_row(
+                idx, df.at[idx, "patient_nbr"], str(gender_series.at[idx]), birth_dates.at[idx]
+            )
+            if message is None:
+                summary["patients_validated"] += 1
+            else:
+                summary["patient_errors"] += 1
+                summary["errors"].append(message)
+                summary["error_details"].append((idx, message))
+
+
+def _validate_quantity_columns(
+    df: pd.DataFrame,
+    columns: Dict[str, str],
+    summary: Dict[str, Any],
+    unit_of: Any,
+    ranges: Optional[Dict[str, tuple]],
+    resource_noun: str,
+    validator: Any,
+) -> None:
+    """Shared vectorized pre-pass + Pydantic-on-failure path for lab/vital columns.
+
+    For each configured column: coerce to numeric (vectorized), flag
+    non-numeric values without needing a model at all, and -- when a
+    plausible range is known for the column -- clear in-range rows without
+    invoking Pydantic. Only out-of-range or otherwise ambiguous rows fall
+    through to the strict per-row model, which also formats the audit-safe
+    error message.
+    """
+    present = df["patient_nbr"].notna()
+    for column, loinc in columns.items():
+        if column not in df.columns:
+            continue
+
+        unit = unit_of(column) if callable(unit_of) else unit_of
+        raw = df[column]
+        has_value = raw.notna() & present
+        numeric = pd.to_numeric(raw, errors="coerce")
+        non_numeric = has_value & numeric.isna()
+
+        summary["observation_errors"] += int(non_numeric.sum())
+        for idx in df.index[non_numeric]:
+            message = f"{resource_noun} row {idx} column {column}: non-numeric value"
+            summary["errors"].append(message)
+            summary["error_details"].append((idx, message))
+
+        is_numeric = has_value & numeric.notna()
+        bounds = ranges.get(loinc) if ranges else None
+        if bounds is not None:
+            low, high = bounds
+            in_range = is_numeric & (numeric >= low) & (numeric <= high)
+        else:
+            in_range = pd.Series(False, index=df.index)
+
+        summary["observations_validated"] += int(in_range.sum())
+
+        needs_pydantic = is_numeric & ~in_range
+        resource_label = f"{resource_noun} ({column})"
+        for idx in df.index[needs_pydantic]:
+            message = validator(
+                idx, df.at[idx, "patient_nbr"], column, loinc, cast(float, numeric.at[idx]), unit, resource_label
+            )
+            if message is None:
+                summary["observations_validated"] += 1
+            else:
+                summary["observation_errors"] += 1
+                summary["errors"].append(message)
+                summary["error_details"].append((idx, message))
+
+
 def validate_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
     """Validate a tabular dataset's patient/lab/vital-sign columns as FHIR resources.
 
@@ -171,6 +325,11 @@ def validate_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
     streaming pipeline modes, and by the standalone `quality` report: both
     map the same source columns to the same strict models, so results do
     not depend on which execution mode produced them.
+
+    Validation runs as a vectorized pandas pass first; only rows that the
+    fast path cannot clear outright (or flags as failing) are ever handed to
+    the strict per-row Pydantic models, which remain the source of truth for
+    FHIR shape/terminology rules and for audit-safe error messages.
     """
     summary: Dict[str, Any] = {
         "patients_validated": 0,
@@ -182,79 +341,28 @@ def validate_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
     if "patient_nbr" in df.columns:
-        for idx, row in df.iterrows():
-            birth_date = row["birthDate"] if "birthDate" in df.columns and pd.notna(row.get("birthDate")) else None
-            try:
-                Patient(
-                    id=str(row["patient_nbr"]),
-                    gender=_normalize_gender(row.get("gender", "unknown")),
-                    birthDate=birth_date,
-                )
-                summary["patients_validated"] += 1
-            except ValidationError as exc:
-                summary["patient_errors"] += 1
-                message = _describe_validation_error("Patient", idx, exc)
-                summary["errors"].append(message)
-                summary["error_details"].append((idx, message))
+        _validate_patients(df, summary)
 
-        for column, loinc in LAB_LOINC_CODES.items():
-            if column not in df.columns:
-                continue
-            for idx, row in df.iterrows():
-                if pd.isna(row[column]):
-                    continue
-                try:
-                    value = float(row[column])
-                except (TypeError, ValueError):
-                    summary["observation_errors"] += 1
-                    message = f"Observation row {idx} column {column}: non-numeric value"
-                    summary["errors"].append(message)
-                    summary["error_details"].append((idx, message))
-                    continue
-                try:
-                    Observation(
-                        id=f"obs-{idx}-{column}".replace("_", "-"),
-                        status="final",
-                        code=CodeableConcept(coding=[Coding(system="http://loinc.org", code=loinc)]),
-                        subject=Reference(reference=f"Patient/{row['patient_nbr']}"),
-                        valueQuantity=Quantity(value=value, unit="mg/dL"),
-                    )
-                    summary["observations_validated"] += 1
-                except ValidationError as exc:
-                    summary["observation_errors"] += 1
-                    message = _describe_validation_error(f"Observation ({column})", idx, exc)
-                    summary["errors"].append(message)
-                    summary["error_details"].append((idx, message))
+        _validate_quantity_columns(
+            df,
+            LAB_LOINC_CODES,
+            summary,
+            unit_of="mg/dL",
+            ranges=None,
+            resource_noun="Observation",
+            validator=_validate_observation_row,
+        )
 
-        for column, loinc in VITAL_SIGN_LOINC_CODES.items():
-            if column not in df.columns:
-                continue
-            unit = {"systolic_bp": "mmHg", "heart_rate": "bpm", "temperature": "C", "spo2": "%"}[column]
-            for idx, row in df.iterrows():
-                if pd.isna(row[column]):
-                    continue
-                try:
-                    value = float(row[column])
-                except (TypeError, ValueError):
-                    summary["observation_errors"] += 1
-                    message = f"Vital sign row {idx} column {column}: non-numeric value"
-                    summary["errors"].append(message)
-                    summary["error_details"].append((idx, message))
-                    continue
-                try:
-                    VitalSigns(
-                        id=f"vital-{idx}-{column}".replace("_", "-"),
-                        status="final",
-                        code=CodeableConcept(coding=[Coding(system="http://loinc.org", code=loinc)]),
-                        subject=Reference(reference=f"Patient/{row['patient_nbr']}"),
-                        valueQuantity=Quantity(value=value, unit=unit),
-                    )
-                    summary["observations_validated"] += 1
-                except ValidationError as exc:
-                    summary["observation_errors"] += 1
-                    message = _describe_validation_error(f"Vital sign ({column})", idx, exc)
-                    summary["errors"].append(message)
-                    summary["error_details"].append((idx, message))
+        vital_units = {"systolic_bp": "mmHg", "heart_rate": "bpm", "temperature": "C", "spo2": "%"}
+        _validate_quantity_columns(
+            df,
+            VITAL_SIGN_LOINC_CODES,
+            summary,
+            unit_of=lambda column: vital_units[column],
+            ranges=VitalSigns.VITAL_RANGES,
+            resource_noun="Vital sign",
+            validator=_validate_vital_sign_row,
+        )
 
     return summary
 
